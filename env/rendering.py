@@ -17,15 +17,19 @@ class GardenerRenderer:
             pygame.draw.line(self.screen, (200, 200, 200),
                              (0, i * self.cell_size),
                              (self.window_size, i * self.cell_size))
-        # Draw agent and target
+        # Draw agent
         ax, ay = state.agent
-        tx, ty = state.target
         pygame.draw.rect(self.screen, (255, 0, 255),
                          pygame.Rect(ax * self.cell_size, ay * self.cell_size,
                                      self.cell_size, self.cell_size))
-        pygame.draw.rect(self.screen, (255, 0, 0),
-                         pygame.Rect(tx * self.cell_size, ty * self.cell_size,
-                                     self.cell_size, self.cell_size))
+
+        # Draw grass patches
+        for idx, (gx, gy) in enumerate(state.grass):
+            color = (0, 100, 0) if idx == state.active_grass else (150, 100, 50)
+            pygame.draw.rect(self.screen, color,
+                             pygame.Rect(gx * self.cell_size, gy * self.cell_size,
+                                         self.cell_size, self.cell_size))
+
         # Draw frogs
         for fx, fy in state.frogs:
             pygame.draw.rect(self.screen, (0, 255, 0),

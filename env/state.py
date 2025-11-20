@@ -6,14 +6,16 @@ class GardenerState:
     lakes: np.ndarray
     lake_full: np.ndarray
     lake_timer: np.ndarray
-    target: np.ndarray
+    grass: np.ndarray
     size: int
+    active_grass: int
 
     def fast_clone(self):
         new = GardenerState()
         new.size = self.size
+        new.active_grass = self.active_grass
         new.agent = self.agent.copy()
-        new.target = self.target.copy()
+        new.grass = self.grass.copy()
         new.frogs = self.frogs.copy()
         new.lakes = self.lakes.copy()
         new.lake_full = self.lake_full.copy()

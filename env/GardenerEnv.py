@@ -1,8 +1,8 @@
+import time
 from typing import Optional
 
 import gymnasium as gym
 import numpy as np
-import time
 
 from env.dynamics import GardenerDynamics
 from env.rendering import GardenerRenderer
@@ -20,12 +20,14 @@ class GardenerEnv(gym.Env):
         self._state.size = size
         num_frogs = max(1, int(size * size * 0.05))
         num_lakes = max(1, int(size * size * 0.03))
+        num_grass = max(1, int(size * size * 0.03))
         self._state.agent = np.array([-1, -1], dtype=int)
-        self._state.target = np.array([-1, -1], dtype=int)
         self._state.frogs = np.full((num_frogs, 2), -1, dtype=int)
         self._state.lakes = np.full((num_lakes, 2), -1, dtype=int)
         self._state.lake_full = np.ones(num_lakes, dtype=bool)
         self._state.lake_timer = np.zeros(num_lakes, dtype=int)
+        self._state.grass = np.full((num_grass, 2), -1, dtype=int)
+        self._state.active_grass = 0
 
         # Define what actions are available (4 directions + 1 do nothing)
         self.action_space = gym.spaces.Discrete(5)
@@ -35,12 +37,13 @@ class GardenerEnv(gym.Env):
         self.observation_space = gym.spaces.Dict(
             {"agent": gym.spaces.Box(0, size - 1, shape=(2,), dtype=int),
              # [x, y] coordinates
-             "target": gym.spaces.Box(0, size - 1, shape=(2,), dtype=int),
-             # [x, y] coordinates
              "frogs": gym.spaces.Box(0, size - 1, shape=(num_frogs, 2),
                                      dtype=int),  # array of [x, y] coordinates
              "lakes": gym.spaces.Box(0, size - 1, shape=(num_lakes, 2),
                                      dtype=int),  # array of [x, y] coordinates
+             "grass": gym.spaces.Box(0, size - 1, shape=(num_grass, 2),
+                                     dtype=int),
+             "active_grass": gym.spaces.Discrete(num_grass),
              "action_mask": gym.spaces.Box(0, 1, shape=(self.action_space.n,),
                                            dtype=np.int8),
              })
@@ -68,8 +71,10 @@ class GardenerEnv(gym.Env):
         Returns:
             dict: Observation with agent, target and frog positions
         """
-        return {"agent": self._state.agent, "target": self._state.target,
+        return {"agent": self._state.agent,
                 "frogs": self._state.frogs, "lakes": self._state.lakes,
+                "grass": self._state.grass,
+                "active_grass": self._state.active_grass,
                 "action_mask": self._dynamics.get_action_mask(self._state,
                                                               self._state.agent)}
 
@@ -80,7 +85,8 @@ class GardenerEnv(gym.Env):
             dict: Info with distance between agent and target
         """
         return {"distance": np.linalg.norm(
-            self._state.agent - self._state.target, ord=1)}
+            self._state.agent - self._state.grass[self._state.active_grass],
+            ord=1)}
 
     def reset(self, seed: Optional[int] = None,
               options: Optional[dict] = None):
@@ -101,17 +107,10 @@ class GardenerEnv(gym.Env):
                                                     size=2,
                                                     dtype=int)
 
-        # Randomly place target, ensuring it's different from agent position
-        self._state.target = self._state.agent
-        while np.array_equal(self._state.target, self._state.agent):
-            self._state.target = self.np_random.integers(0, self._state.size,
-                                                         size=2, dtype=int)
-
-        # Place frogs randomly on the grid, avoiding agent and target
+        # Place frogs randomly on the grid, avoiding agent
         all_positions = {(x, y) for x in range(self._state.size) for y in
                          range(self._state.size)}
         all_positions.discard(tuple(self._state.agent))
-        all_positions.discard(tuple(self._state.target))
         frog_positions = self.np_random.choice(list(all_positions),
                                                size=len(self._state.frogs),
                                                replace=False)
@@ -121,10 +120,18 @@ class GardenerEnv(gym.Env):
                                                size=len(self._state.lakes),
                                                replace=False)
 
+        for lake_pos in lake_positions:
+            all_positions.discard(tuple(lake_pos))
+        grass_positions = self.np_random.choice(list(all_positions),
+                                                size=len(self._state.grass),
+                                                replace=False)
+
         # np_random.choice returns a 1D array if input is 1D, so convert to
         # 2D array of positions
         self._state.frogs = np.array(frog_positions, dtype=int)
         self._state.lakes = np.array(lake_positions, dtype=int)
+        self._state.grass = np.array(grass_positions, dtype=int)
+        self._state.active_grass = self.np_random.integers(0, len(self._state.grass))
 
         observation = self._get_obs()
         info = self._get_info()
@@ -156,7 +163,7 @@ class GardenerEnv(gym.Env):
         Returns:
             tuple: (observation, reward, terminated, truncated, info)
         """
-        terminated = self._dynamics.move_agent(self._state, action)
+        terminated = self._dynamics.move_agent(self._state, action, self.np_random)
         self._dynamics.move_frogs(self._state, self.np_random)
 
         # Update lake states based on frog adjacency

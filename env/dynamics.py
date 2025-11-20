@@ -22,7 +22,7 @@ class GardenerDynamics:
                 mask[action] = 0
         return mask
 
-    def move_agent(self, state, action):
+    def move_agent(self, state, action, np_random):
         mask = self.get_action_mask(state, state.agent)
 
         if mask[action] == 0:
@@ -35,8 +35,14 @@ class GardenerDynamics:
         # np.clip prevents the agent from walking off the edge
         state.agent = state.agent + direction
 
-        # Check if agent reached the target
-        terminated = np.array_equal(state.agent, state.target)
+        # Check if agent reached the active grass patch
+        terminated = np.array_equal(state.agent,
+                                    state.grass[state.active_grass])
+
+        if terminated:
+            choices = [i for i in range(len(state.grass)) if
+                       i != state.active_grass]
+            state.active_grass = np_random.choice(choices)
 
         return terminated
 
