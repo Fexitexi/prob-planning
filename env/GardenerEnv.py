@@ -21,7 +21,7 @@ class GardenerEnv(gym.Env):
         num_frogs = max(1, int(size * size * 0.05))
         num_lakes = max(1, int(size * size * 0.03))
         num_grass = max(1, int(size * size * 0.03))
-        num_walls = int(size * size * 0.40)
+        num_walls = int(size * size * 0.20)
         self._state.walls = np.full((num_walls, 2), -1, dtype=int)
 
         self._state.agent = np.array([-1, -1], dtype=int)
@@ -128,6 +128,14 @@ class GardenerEnv(gym.Env):
 
         for lake_pos in lake_positions:
             all_positions.discard(tuple(lake_pos))
+            lx, ly = lake_pos
+            neighbors = [
+                (lx + 1, ly), (lx - 1, ly),
+                (lx, ly + 1), (lx, ly - 1)
+            ]
+            for nx, ny in neighbors:
+                if 0 <= nx < self._state.size and 0 <= ny < self._state.size:
+                    all_positions.discard((nx, ny))
         grass_positions = self.np_random.choice(list(all_positions),
                                                 size=len(self._state.grass),
                                                 replace=False)
