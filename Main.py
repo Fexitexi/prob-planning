@@ -16,8 +16,8 @@ if __name__ == "__main__":
         mask = obs["action_mask"]
         valid_actions = [i for i in range(len(mask)) if mask[i] == 1]
         action = random.choice(valid_actions)
-        gar = env.unwrapped
-        gar.sample(3, 500)
+        #gar = env.unwrapped
+        #gar.sample(3, 500)
         obs, reward, terminated, truncated, info = env.step(action)
         env.render()
         time.sleep(1)

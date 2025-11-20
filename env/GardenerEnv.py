@@ -263,11 +263,16 @@ class GardenerEnv(gym.Env):
 
             # Check adjacency to any frog (Manhattan distance 1)
             for fx, fy in self._state.frogs:
-                if abs(fx - lx) + abs(fy - ly) == 1 and self._state.lake_full[
-                    i]:
+                if abs(fx - lx) + abs(fy - ly) == 1 and self._state.lake_full[i]:
                     self._state.lake_full[i] = False
                     self._state.lake_timer[i] = 5
                     break
+
+            # Check adjacency to the agent (Manhattan distance 1)
+            ax, ay = self._state.agent
+            if self._state.lake_full[i] and abs(ax - lx) + abs(ay - ly) == 1:
+                self._state.lake_full[i] = False
+                self._state.lake_timer[i] = 5
 
         # We don't use truncation in this simple environment
         # (could add a step limit here if desired)
