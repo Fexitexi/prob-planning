@@ -7,6 +7,7 @@ class GardenerState:
     lake_full: np.ndarray
     lake_timer: np.ndarray
     grass: np.ndarray
+    walls: np.ndarray
     size: int
     active_grass: int
 
@@ -16,6 +17,7 @@ class GardenerState:
         new.active_grass = self.active_grass
         new.agent = self.agent.copy()
         new.grass = self.grass.copy()
+        new.walls = self.walls.copy()
         new.frogs = self.frogs.copy()
         new.lakes = self.lakes.copy()
         new.lake_full = self.lake_full.copy()

@@ -22,6 +22,5 @@ if __name__ == "__main__":
         env.render()
         time.sleep(1)
         done = terminated or truncated
-        print(f"Obs: {obs}, Reward: {reward}")
 
     env.close()

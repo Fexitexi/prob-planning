@@ -1,5 +1,6 @@
 import pygame
 
+
 class GardenerRenderer:
     def draw(self, state):
         if not hasattr(self, "screen"):
@@ -25,10 +26,12 @@ class GardenerRenderer:
 
         # Draw grass patches
         for idx, (gx, gy) in enumerate(state.grass):
-            color = (0, 100, 0) if idx == state.active_grass else (150, 100, 50)
+            color = (0, 100, 0) if idx == state.active_grass else (150, 100,
+                                                                   50)
             pygame.draw.rect(self.screen, color,
-                             pygame.Rect(gx * self.cell_size, gy * self.cell_size,
-                                         self.cell_size, self.cell_size))
+                             pygame.Rect(gx * self.cell_size,
+                                         gy * self.cell_size, self.cell_size,
+                                         self.cell_size))
 
         # Draw frogs
         for fx, fy in state.frogs:
@@ -41,8 +44,16 @@ class GardenerRenderer:
             color = (0, 0, 255) if state.lake_full[idx] else (100, 100, 255)
             pygame.draw.rect(self.screen, color,
                              pygame.Rect(lx * self.cell_size,
-                                         ly * self.cell_size,
-                                         self.cell_size, self.cell_size))
+                                         ly * self.cell_size, self.cell_size,
+                                         self.cell_size))
+
+        # Draw walls
+        for wx, wy in state.walls:
+            pygame.draw.rect(self.screen, (120, 120, 120),
+                             pygame.Rect(wx * self.cell_size,
+                                         wy * self.cell_size, self.cell_size,
+                                         self.cell_size))
+
         pygame.display.flip()
         pygame.display.set_caption("GardenerEnv")
         pygame.event.pump()

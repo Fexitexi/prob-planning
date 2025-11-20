@@ -21,6 +21,9 @@ class GardenerEnv(gym.Env):
         num_frogs = max(1, int(size * size * 0.05))
         num_lakes = max(1, int(size * size * 0.03))
         num_grass = max(1, int(size * size * 0.03))
+        num_walls = int(size * size * 0.40)
+        self._state.walls = np.full((num_walls, 2), -1, dtype=int)
+
         self._state.agent = np.array([-1, -1], dtype=int)
         self._state.frogs = np.full((num_frogs, 2), -1, dtype=int)
         self._state.lakes = np.full((num_lakes, 2), -1, dtype=int)
@@ -44,6 +47,8 @@ class GardenerEnv(gym.Env):
              "grass": gym.spaces.Box(0, size - 1, shape=(num_grass, 2),
                                      dtype=int),
              "active_grass": gym.spaces.Discrete(num_grass),
+             "walls": gym.spaces.Box(0, size - 1, shape=(num_walls, 2),
+                                     dtype=int),
              "action_mask": gym.spaces.Box(0, 1, shape=(self.action_space.n,),
                                            dtype=np.int8),
              })
@@ -75,6 +80,7 @@ class GardenerEnv(gym.Env):
                 "frogs": self._state.frogs, "lakes": self._state.lakes,
                 "grass": self._state.grass,
                 "active_grass": self._state.active_grass,
+                "walls": self._state.walls,
                 "action_mask": self._dynamics.get_action_mask(self._state,
                                                               self._state.agent)}
 
@@ -125,6 +131,43 @@ class GardenerEnv(gym.Env):
         grass_positions = self.np_random.choice(list(all_positions),
                                                 size=len(self._state.grass),
                                                 replace=False)
+
+
+        for grass_pos in grass_positions:
+            all_positions.discard(tuple(grass_pos))
+
+        # Generate walls ensuring accessibility of all non-lake, non-wall cells
+        def is_accessible(excluded):
+            # BFS over free cells
+            free = {(x, y) for x in range(self._state.size)
+                    for y in range(self._state.size)}
+            free -= set(map(tuple, lake_positions))
+            free -= set(excluded)
+            if not free:
+                return True
+            start = next(iter(free))
+            stack = [start]
+            visited = set([start])
+            while stack:
+                cx, cy = stack.pop()
+                for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+                    nx, ny = cx + dx, cy + dy
+                    if (nx, ny) in free and (nx, ny) not in visited:
+                        visited.add((nx, ny))
+                        stack.append((nx, ny))
+            return visited == free
+
+        wall_positions = []
+        remaining_positions = list(all_positions)
+        self.np_random.shuffle(remaining_positions)
+        for pos in remaining_positions:
+            if len(wall_positions) == len(self._state.walls):
+                break
+            trial = wall_positions + [tuple(pos)]
+            if is_accessible(trial):
+                wall_positions.append(tuple(pos))
+        self._state.walls = np.array(wall_positions, dtype=int)
+
 
         # np_random.choice returns a 1D array if input is 1D, so convert to
         # 2D array of positions

@@ -20,6 +20,8 @@ class GardenerDynamics:
             nx, ny = pos + direction
             if any((nx == lx and ny == ly) for lx, ly in state.lakes):
                 mask[action] = 0
+            if any((nx == wx and ny == wy) for wx,wy in state.walls):
+                mask[action] = 0
         return mask
 
     def move_agent(self, state, action, np_random):
@@ -77,7 +79,15 @@ class GardenerDynamics:
         else:
             on_lake = np.zeros_like(in_bounds, dtype=bool)
 
-        allowed = in_bounds & (~on_lake)  # (N, 4)
+        # Avoid walls
+        walls = state.walls
+        if walls.size > 0:
+            diffw = cand_pos[:, :, None, :] - walls[None, None, :, :]
+            on_wall = (diffw == 0).all(axis=3).any(axis=2)
+        else:
+            on_wall = np.zeros_like(in_bounds, dtype=bool)
+
+        allowed = in_bounds & (~on_lake) & (~on_wall)  # (N, 4)
 
         # Frogs with no allowed moves stay in place
         n_allowed = allowed.sum(axis=1)  # (N,)
