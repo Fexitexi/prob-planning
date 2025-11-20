@@ -5,6 +5,8 @@ class GardenerState:
     frogs: np.ndarray
     lakes: np.ndarray
     lake_full: np.ndarray
+    lake_dist: np.ndarray
+    lake_best_step: np.ndarray
     lake_timer: np.ndarray
     grass: np.ndarray
     walls: np.ndarray
@@ -20,6 +22,8 @@ class GardenerState:
         new.walls = self.walls.copy()
         new.frogs = self.frogs.copy()
         new.lakes = self.lakes.copy()
+        new.lake_dist = self.lake_dist.copy()
+        new.lake_best_step = self.lake_best_step.copy()
         new.lake_full = self.lake_full.copy()
         new.lake_timer = self.lake_timer.copy()
         return new

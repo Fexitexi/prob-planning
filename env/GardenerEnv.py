@@ -18,7 +18,7 @@ class GardenerEnv(gym.Env):
         # Using -1,-1 as "uninitialized" state
         self._state = GardenerState()
         self._state.size = size
-        num_frogs = max(1, int(size * size * 0.05))
+        num_frogs = max(1, int(size * size * 0.03))
         num_lakes = max(1, int(size * size * 0.03))
         num_grass = max(1, int(size * size * 0.03))
         num_walls = int(size * size * 0.20)
@@ -176,6 +176,42 @@ class GardenerEnv(gym.Env):
                 wall_positions.append(tuple(pos))
         self._state.walls = np.array(wall_positions, dtype=int)
 
+        # -------------------------------------------------------------
+        # Precompute shortest-path distance and best-step fields
+        # -------------------------------------------------------------
+        size = self._state.size
+        walls_set = {tuple(w) for w in self._state.walls}
+        lake_dist = []
+        lake_best_step = []
+
+        from collections import deque
+
+        for (lx, ly) in lake_positions:
+            dist = np.full((size, size), np.iinfo(np.int32).max, dtype=np.int32)
+            best = np.zeros((size, size, 2), dtype=np.int8)
+
+            q = deque()
+            q.append((lx, ly))
+            dist[lx, ly] = 0
+
+            while q:
+                x, y = q.popleft()
+                for dx, dy in [(1,0), (-1,0), (0,1), (0,-1)]:
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < size and 0 <= ny < size:
+                        if (nx, ny) in walls_set:
+                            continue
+                        if dist[nx, ny] > dist[x, y] + 1:
+                            dist[nx, ny] = dist[x, y] + 1
+                            best[nx, ny] = np.array([-dx, -dy], dtype=np.int8)
+                            q.append((nx, ny))
+
+            lake_dist.append(dist)
+            lake_best_step.append(best)
+
+        self._state.lake_dist = lake_dist
+        self._state.lake_best_step = lake_best_step
+
 
         # np_random.choice returns a 1D array if input is 1D, so convert to
         # 2D array of positions
@@ -214,7 +250,7 @@ class GardenerEnv(gym.Env):
         Returns:
             tuple: (observation, reward, terminated, truncated, info)
         """
-        terminated = self._dynamics.move_agent(self._state, action, self.np_random)
+        grass_patch = self._dynamics.move_agent(self._state, action, self.np_random)
         self._dynamics.move_frogs(self._state, self.np_random)
 
         # Update lake states based on frog adjacency
@@ -237,10 +273,13 @@ class GardenerEnv(gym.Env):
         # (could add a step limit here if desired)
         truncated = False
 
+        # The environment cannot terminate for now
+        terminated = False
+
         # Simple reward structure: +1 for reaching target, 0 otherwise
         # Alternative: could give small negative rewards for each step to
         # encourage efficiency
-        reward = 1 if terminated else -0.01
+        reward = 1 if grass_patch else -0.01
 
         observation = self._get_obs()
         info = self._get_info()

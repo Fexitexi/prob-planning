@@ -94,29 +94,28 @@ class GardenerDynamics:
         no_allowed = n_allowed == 0
 
         # ------------------------------------------------------------------
-        # Compute preferred actions based on nearest full lake (if any)
+        # Preferred action based on BFS best step toward nearest full lake
         # ------------------------------------------------------------------
-        full_lakes = state.lakes[state.lake_full]
-
-        if full_lakes.size > 0:
-            # Manhattan distance from each frog to each full lake: (N, K)
-            dists = np.abs(frogs[:, None, :] - full_lakes[None, :, :]).sum(axis=2)
-            nearest_idx = np.argmin(dists, axis=1)  # (N,)
-            targets = full_lakes[nearest_idx]       # (N, 2)
-            deltas = np.sign(targets - frogs)       # (N, 2)
+        full_lake_indices = np.where(state.lake_full)[0]
+        if len(full_lake_indices) == 0:
+            preferred = np.zeros_like(allowed, dtype=bool)
         else:
-            # No full lakes -> no preference
-            deltas = np.zeros_like(frogs)
+            # For each frog, pick the lake with minimal BFS distance
+            dstack = np.stack([state.lake_dist[k][frogs[:,0], frogs[:,1]] for k in full_lake_indices], axis=1)
+            nearest_choice = np.argmin(dstack, axis=1)
+            chosen_lake_idx = full_lake_indices[nearest_choice]
 
-        # Build preferred matrix (N, 4): action is preferred if it moves in the
-        # sign direction of dx or dy towards the chosen full lake.
-        dx = deltas[:, 0:1]  # (N,1)
-        dy = deltas[:, 1:1+1]  # (N,1)
+            # Retrieve best-step vectors
+            deltas = np.stack([state.lake_best_step[k][frogs[i,0], frogs[i,1]]
+                               for i, k in enumerate(chosen_lake_idx)], axis=0)
 
-        # directions[:,0] shape (4,) -> (1,4) for broadcasting
-        match_x = (dx != 0) & (dx == directions[None, :, 0])
-        match_y = (dy != 0) & (dy == directions[None, :, 1])
-        preferred = match_x | match_y  # (N,4)
+            # Match deltas to available move directions
+            dx_pref = deltas[:, 0:1]
+            dy_pref = deltas[:, 1:2]
+
+            match_x = (dx_pref != 0) & (dx_pref == directions[None, :, 0])
+            match_y = (dy_pref != 0) & (dy_pref == directions[None, :, 1])
+            preferred = match_x | match_y
 
         # Only actions that are allowed can be chosen
         pref_allowed = preferred & allowed
