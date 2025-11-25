@@ -3,12 +3,27 @@ import numpy as np
 
 class GardenerDynamics:
 
-    def __init__(self, action_space, action_to_direction):
-        self._action_space = action_space
-        self._action_to_direction = action_to_direction
+    # Map action numbers to actual movements on the grid
+    # This makes the code more readable than using raw numbers
+
+    _action_to_direction = {0: np.array([1, 0]),
+                                     # Move right (positive x)
+                                     1: np.array([0, 1]),
+                                     # Move up (positive y)
+                                     2: np.array([-1, 0]),
+                                     # Move left (negative x)
+                                     3: np.array([0, -1]),
+                                     # Move down (negative y)
+                                     4: np.array([0, 0]),  # Do nothing
+                                     }
+
+    def __init__(self, seed):
+        if seed is None:
+            seed = np.random.SeedSequence().entropy
+        self.np_random = np.random.Generator(np.random.PCG64(seed))
 
     def get_action_mask(self, state, pos):
-        mask = np.ones(self._action_space.n, dtype=np.int8)
+        mask = np.ones(len(self._action_to_direction), dtype=np.int8)
         x, y = pos
         # Prevent moves that leave the grid
         if x == state.size - 1: mask[0] = 0
@@ -24,7 +39,7 @@ class GardenerDynamics:
                 mask[action] = 0
         return mask
 
-    def move_agent(self, state, action, np_random):
+    def move_agent(self, state, action):
         mask = self.get_action_mask(state, state.agent)
 
         if mask[action] == 0:
@@ -44,12 +59,12 @@ class GardenerDynamics:
         if terminated:
             choices = [i for i in range(len(state.grass)) if
                        i != state.active_grass]
-            state.active_grass = np_random.choice(choices)
+            state.active_grass = self.np_random.choice(choices)
 
         return terminated
 
 
-    def move_frogs(self, state, np_random):
+    def move_frogs(self, state):
         frogs = state.frogs  # shape (N, 2)
         size = state.size
 
@@ -96,7 +111,7 @@ class GardenerDynamics:
         # ------------------------------------------------------------------
         # Preferred action based on BFS best step toward nearest full lake
         # ------------------------------------------------------------------
-        full_lake_indices = np.where(state.lake_full)[0]
+        full_lake_indices = np.where(state.lakes_full)[0]
         if len(full_lake_indices) == 0:
             preferred = np.zeros_like(allowed, dtype=bool)
         else:
@@ -172,7 +187,7 @@ class GardenerDynamics:
             cdf = np.cumsum(w, axis=1)
             # Avoid tiny numerical gaps: ensure last entry is exactly 1
             cdf[:, -1] = 1.0
-            r = np_random.random(size=len(rows))[:, None]
+            r = self.np_random.random(size=len(rows))[:, None]
             chosen_actions = (cdf >= r).argmax(axis=1)  # (M,)
 
             moves = directions[chosen_actions]          # (M,2)

@@ -27,7 +27,7 @@ class GardenerEnv(gym.Env):
         self._state.agent = np.array([-1, -1], dtype=int)
         self._state.frogs = np.full((num_frogs, 2), -1, dtype=int)
         self._state.lakes = np.full((num_lakes, 2), -1, dtype=int)
-        self._state.lake_full = np.ones(num_lakes, dtype=bool)
+        self._state.lakes_full = np.ones(num_lakes, dtype=bool)
         self._state.lake_timer = np.zeros(num_lakes, dtype=int)
         self._state.grass = np.full((num_grass, 2), -1, dtype=int)
         self._state.active_grass = 0
@@ -44,6 +44,9 @@ class GardenerEnv(gym.Env):
                                      dtype=int),  # array of [x, y] coordinates
              "lakes": gym.spaces.Box(0, size - 1, shape=(num_lakes, 2),
                                      dtype=int),  # array of [x, y] coordinates
+             "size": gym.spaces.Discrete(size + 1),
+             "lakes_full": gym.spaces.Box(0, 1, shape=(num_lakes,),
+                                          dtype=bool),
              "grass": gym.spaces.Box(0, size - 1, shape=(num_grass, 2),
                                      dtype=int),
              "active_grass": gym.spaces.Discrete(num_grass),
@@ -53,22 +56,9 @@ class GardenerEnv(gym.Env):
                                            dtype=np.int8),
              })
 
-        # Map action numbers to actual movements on the grid
-        # This makes the code more readable than using raw numbers
-        action_to_direction = {0: np.array([1, 0]),
-                                     # Move right (positive x)
-                                     1: np.array([0, 1]),
-                                     # Move up (positive y)
-                                     2: np.array([-1, 0]),
-                                     # Move left (negative x)
-                                     3: np.array([0, -1]),
-                                     # Move down (negative y)
-                                     4: np.array([0, 0]),  # Do nothing
-                                     }
-
 
         self._renderer = GardenerRenderer()
-        self._dynamics = GardenerDynamics(self.action_space, action_to_direction)
+        self._dynamics = GardenerDynamics(self._np_random_seed)
 
     def _get_obs(self):
         """Convert internal state to observation format.
@@ -77,7 +67,10 @@ class GardenerEnv(gym.Env):
             dict: Observation with agent, target and frog positions
         """
         return {"agent": self._state.agent,
-                "frogs": self._state.frogs, "lakes": self._state.lakes,
+                "frogs": self._state.frogs,
+                "size": self._state.size,
+                "lakes": self._state.lakes,
+                "lakes_full": self._state.lakes_full,
                 "grass": self._state.grass,
                 "active_grass": self._state.active_grass,
                 "walls": self._state.walls,
@@ -94,14 +87,6 @@ class GardenerEnv(gym.Env):
             self._state.agent - self._state.grass[self._state.active_grass],
             ord=1)}
 
-    def get_features(self, action):
-        features = {
-            "mows_lawn": self.will_reach_target_after_action(action, "grass"),
-            "sips_lake": self.will_reach_target_after_action(action, "lake"),
-            "dist_lawn": self.shortest_path_after_action(action, "grass"),
-            "dist_lake": self.shortest_path_after_action(action, "lake"),}
-        return features
-
     def reset(self, seed: Optional[int] = None,
               options: Optional[dict] = None):
         """Start a new episode.
@@ -115,6 +100,8 @@ class GardenerEnv(gym.Env):
         """
         # IMPORTANT: Must call this first to seed the random number generator
         super().reset(seed=seed)
+
+        self._dynamics = GardenerDynamics(seed=seed)
 
         # Randomly place the agent anywhere on the grid
         self._state.agent = self.np_random.integers(0, self._state.size,
@@ -244,91 +231,11 @@ class GardenerEnv(gym.Env):
             # deep copy of full environment state
             state = self._state.fast_clone()
             for h in range(horizon):
-                self._dynamics.move_frogs(state, np_random)
+                self._dynamics.move_frogs(state)
 
         elapsed = time.time() - start_time
         print(f"sample() took {elapsed:.6f} seconds for size={size}, horizon={horizon}")
 
-    def shortest_path_after_action(self, action, target_type):
-        """
-        Compute the shortest-path distance for the agent after executing `action`
-        to either:
-            - the nearest active grass cell  (target_type == "grass")
-            - the nearest full lake cell     (target_type == "lake")
-
-        Returns:
-            int: number of steps in shortest path, or None if unreachable.
-        """
-        # clone state to avoid modifying real environment
-        temp_state = self._state.fast_clone()
-
-        # simulate agent move
-        self._dynamics.move_agent(temp_state, action, self.np_random)
-
-        # Build obstacle set
-        size = temp_state.size
-        walls = {tuple(w) for w in temp_state.walls}
-        lakes = {tuple(l) for l in temp_state.lakes}
-
-        # choose target set
-        if target_type == "grass":
-            targets = [tuple(temp_state.grass[temp_state.active_grass])]
-        elif target_type == "lake":
-            targets = [tuple(l) for i, l in enumerate(temp_state.lakes)
-                       if temp_state.lake_full[i]]
-        else:
-            return None
-
-        from collections import deque
-        ax, ay = temp_state.agent
-        start = (ax, ay)
-
-        # BFS
-        visited = set([start])
-        q = deque([(start, 0)])
-        while q:
-            (x, y), d = q.popleft()
-            if (x, y) in targets:
-                # normalize distance here to the instance size
-                return d / (temp_state.size * temp_state.size)
-            for dx, dy in [(1,0), (-1,0), (0,1), (0,-1)]:
-                nx, ny = x + dx, y + dy
-                if 0 <= nx < size and 0 <= ny < size:
-                    if (nx, ny) in visited:
-                        continue
-                    if (nx, ny) in walls:
-                        continue
-                    if (nx, ny) in lakes and target_type != "lake":
-                        continue
-                    visited.add((nx, ny))
-                    q.append(((nx, ny), d + 1))
-        return None
-
-    def will_reach_target_after_action(self, action, target_type):
-        """
-        Returns True if executing `action` places the agent on:
-            - the active grass patch               (target_type == "grass")
-            - any cell adjacent to a full lake     (target_type == "lake")
-        Otherwise returns False.
-        """
-        temp_state = self._state.fast_clone()
-        temp_state_prev = self._state.fast_clone()
-        self._dynamics.move_agent(temp_state, action, self.np_random)
-
-        ax, ay = temp_state.agent
-
-        if target_type == "grass":
-            gx, gy = temp_state_prev.grass[temp_state_prev.active_grass]
-            return 1.0 if (ax, ay) == (gx, gy) else 0.0
-
-        if target_type == "lake":
-            for i, (lx, ly) in enumerate(temp_state_prev.lakes):
-                if temp_state_prev.lake_full[i]:
-                    if abs(ax - lx) + abs(ay - ly) == 1:
-                        return 1.0
-            return 0.0
-
-        return 0.0
 
     def step(self, action):
         """Execute one timestep within the environment.
@@ -339,8 +246,8 @@ class GardenerEnv(gym.Env):
         Returns:
             tuple: (observation, reward, terminated, truncated, info)
         """
-        grass_patch = self._dynamics.move_agent(self._state, action, self.np_random)
-        self._dynamics.move_frogs(self._state, self.np_random)
+        grass_patch = self._dynamics.move_agent(self._state, action)
+        self._dynamics.move_frogs(self._state)
 
         # Update lake states based on frog adjacency
         for i, (lx, ly) in enumerate(self._state.lakes):
@@ -348,19 +255,19 @@ class GardenerEnv(gym.Env):
             if self._state.lake_timer[i] > 0:
                 self._state.lake_timer[i] -= 1
                 if self._state.lake_timer[i] == 0:
-                    self._state.lake_full[i] = True  # refill lake
+                    self._state.lakes_full[i] = True  # refill lake
 
             # Check adjacency to any frog (Manhattan distance 1)
             for fx, fy in self._state.frogs:
-                if abs(fx - lx) + abs(fy - ly) == 1 and self._state.lake_full[i]:
-                    self._state.lake_full[i] = False
+                if abs(fx - lx) + abs(fy - ly) == 1 and self._state.lakes_full[i]:
+                    self._state.lakes_full[i] = False
                     self._state.lake_timer[i] = 5
                     break
 
             # Check adjacency to the agent (Manhattan distance 1)
             ax, ay = self._state.agent
-            if self._state.lake_full[i] and abs(ax - lx) + abs(ay - ly) == 1:
-                self._state.lake_full[i] = False
+            if self._state.lakes_full[i] and abs(ax - lx) + abs(ay - ly) == 1:
+                self._state.lakes_full[i] = False
                 self._state.lake_timer[i] = 5
 
         # We don't use truncation in this simple environment

@@ -41,7 +41,7 @@ class GardenerRenderer:
                                          self.cell_size))
         # Draw lakes
         for idx, (lx, ly) in enumerate(state.lakes):
-            color = (0, 0, 255) if state.lake_full[idx] else (100, 100, 255)
+            color = (0, 0, 255) if state.lakes_full[idx] else (100, 100, 255)
             pygame.draw.rect(self.screen, color,
                              pygame.Rect(lx * self.cell_size,
                                          ly * self.cell_size, self.cell_size,
