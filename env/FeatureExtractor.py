@@ -11,7 +11,8 @@ class FeatureExtractor:
             "mows_lawn": self.will_reach_target_after_action(state, action, "grass"),
             "sips_lake": self.will_reach_target_after_action(state, action, "lake"),
             "dist_lawn": self.shortest_path_after_action(state, action, "grass"),
-            "dist_lake": self.shortest_path_after_action(state, action, "lake"), }
+            "dist_lake": self.shortest_path_after_action(state, action, "lake"),
+            "exists_lake": 1.0 if any(state.lakes_full) else 0.0, }
         return features
 
     def shortest_path_after_action(self, state, action, target_type):
@@ -67,7 +68,7 @@ class FeatureExtractor:
                         continue
                     visited.add((nx, ny))
                     q.append(((nx, ny), d + 1))
-        return None
+        return 0.0
 
     def will_reach_target_after_action(self, state, action, target_type):
         """
