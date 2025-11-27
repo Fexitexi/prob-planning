@@ -252,6 +252,8 @@ class GardenerEnv(gym.Env):
         grass_patch = self._dynamics.move_agent(self._state, action)
         self._dynamics.move_frogs(self._state)
 
+        reward = 0
+
         # Update lake states based on frog adjacency
         for i, (lx, ly) in enumerate(self._state.lakes):
             # Decrease timer if running
@@ -270,6 +272,8 @@ class GardenerEnv(gym.Env):
             # Check adjacency to the agent (Manhattan distance 1)
             ax, ay = self._state.agent
             if self._state.lakes_full[i] and abs(ax - lx) + abs(ay - ly) == 1:
+                # Additional reward for being adjacent (Manhattan distance 1) to any full lake
+                reward += 5
                 self._state.lakes_full[i] = False
                 self._state.lake_timer[i] = 5
 
@@ -280,14 +284,7 @@ class GardenerEnv(gym.Env):
         # Simple reward structure: +1 for reaching target, 0 otherwise
         # Alternative: could give small negative rewards for each step to
         # encourage efficiency
-        reward = 50 if grass_patch else 0
-
-        # Additional reward for being adjacent (Manhattan distance 1) to any lake
-        ax, ay = self._state.agent
-        for lx, ly in self._state.lakes:
-            if abs(ax - lx) + abs(ay - ly) == 1:
-                reward += 5
-                break
+        reward += 50 if grass_patch else 0
 
         self._state.score += reward
 

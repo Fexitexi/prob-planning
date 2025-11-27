@@ -54,6 +54,13 @@ class GardenerRenderer:
                                          wy * self.cell_size, self.cell_size,
                                          self.cell_size))
 
+        # Draw score
+        if not hasattr(self, "font"):
+            pygame.font.init()
+            self.font = pygame.font.SysFont(None, 24)
+        score_surf = self.font.render(f"Score: {state.score}", True, (0, 0, 0))
+        self.screen.blit(score_surf, (5, 5))
+
         pygame.display.flip()
         pygame.display.set_caption("GardenerEnv")
         pygame.event.pump()

@@ -11,8 +11,7 @@ class FeatureExtractor:
             "mows_lawn": self.will_reach_target_after_action(state, action, "grass"),
             "sips_lake": self.will_reach_target_after_action(state, action, "lake"),
             "dist_lawn": self.shortest_path_after_action(state, action, "grass"),
-            "dist_lake": self.shortest_path_after_action(state, action, "lake"),
-            "exists_lake": 1.0 if any(state.lakes_full) else 0.0, }
+            "dist_lake": self.shortest_path_after_action(state, action, "lake"),}
         return features
 
     def shortest_path_after_action(self, state, action, target_type):
@@ -56,7 +55,7 @@ class FeatureExtractor:
             (x, y), d = q.popleft()
             if (x, y) in targets:
                 # normalize distance here to the instance size
-                return d / (temp_state.size * temp_state.size)
+                return 1.0 - (d / (temp_state.size * temp_state.size))
             for dx, dy in [(1,0), (-1,0), (0,1), (0,-1)]:
                 nx, ny = x + dx, y + dy
                 if 0 <= nx < size and 0 <= ny < size:

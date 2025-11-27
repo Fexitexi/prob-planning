@@ -19,7 +19,7 @@ class GardenerState:
     def fast_clone(self):
         new = GardenerState()
         new.size = self.size
-        new.size = self.score
+        new.score = self.score
         new.active_grass = self.active_grass
         new.agent = self.agent.copy()
         new.grass = self.grass.copy()

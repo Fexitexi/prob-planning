@@ -60,7 +60,7 @@ class GardenerQAgent:
         """
         legalActions = np.where(state.action_mask == 1)[0]
         if util.flipCoin(self.epsilon):
-            print("Random Action")
+            #print("Random Action")
             return random.choice(legalActions)
 
         return self.computeActionFromQValues(state)
@@ -80,7 +80,7 @@ class GardenerQAgent:
         # Filter into list with same max value.
         bestActions = list(
             filter(lambda x: x[1] == maxValue, actionValuePairs))
-        print(f"Best actions: {bestActions}, value: {maxValue}")
+        #print(f"Best actions: {bestActions}, value: {maxValue}")
         return random.choice(bestActions)[0]
 
     def observeTransition(self, action, nextState, deltaReward):
@@ -89,6 +89,7 @@ class GardenerQAgent:
         """
         self.episodeRewards += deltaReward
         self.update(self.lastState, action, nextState, deltaReward)
+        self.lastState = nextState.fast_clone()
 
     def startEpisode(self):
         """
@@ -108,8 +109,13 @@ class GardenerQAgent:
             self.epsilon = 0.0    # no exploration
             self.alpha = 0.0      # no learning
 
-    def registerInitialState(self):
+    def stopLearning(self):
+        self.epsilon = 0.0  # no exploration
+        self.alpha = 0.0
+
+    def registerInitialState(self, state):
         self.startEpisode()
+        self.lastState = state
         # todo log
         #if self.episodesSoFar == 0:
         #    print('Beginning %d episodes of Training' % (self.numTraining))
