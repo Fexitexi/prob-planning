@@ -174,6 +174,9 @@ class GardenerEnv(gym.Env):
                 wall_positions.append(tuple(pos))
         self._state.walls = np.array(wall_positions, dtype=int)
 
+        print("free candidates:", len(remaining_positions))
+        print("accepted:", len(wall_positions))
+
         # -------------------------------------------------------------
         # Precompute shortest-path distance and best-step fields
         # -------------------------------------------------------------

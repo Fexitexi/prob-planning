@@ -14,6 +14,7 @@ if __name__ == "__main__":
     env = gym.make("GardenerEnv-v0")
     numTraining = 500
     numTesting = 100
+    q_agent = GardenerQAgent()
 
     while numTraining > 0 or numTesting > 0:
         if numTraining > 0:
@@ -25,7 +26,6 @@ if __name__ == "__main__":
 
         # RL agent test
         state = ObservationState.from_obs(obs)
-        q_agent = GardenerQAgent()
         q_agent.registerInitialState(state)
 
         print("Starting episode {}\n".format(numTraining))
