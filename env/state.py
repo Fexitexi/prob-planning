@@ -13,11 +13,13 @@ class GardenerState:
     grass: np.ndarray
     walls: np.ndarray
     size: int
+    score: int
     active_grass: int
 
     def fast_clone(self):
         new = GardenerState()
         new.size = self.size
+        new.size = self.score
         new.active_grass = self.active_grass
         new.agent = self.agent.copy()
         new.grass = self.grass.copy()
@@ -38,6 +40,7 @@ class ObservationState:
     lakes_full: np.ndarray
     grass: np.ndarray
     walls: np.ndarray
+    action_mask: np.ndarray
     size: int
     active_grass: int
 
@@ -51,6 +54,7 @@ class ObservationState:
             grass=obs["grass"],
             active_grass=obs["active_grass"],
             walls=obs["walls"],
+            action_mask=obs["action_mask"],
             size=obs["size"]
         )
 
@@ -62,6 +66,7 @@ class ObservationState:
             lakes_full=self.lakes_full.copy(),
             grass=self.grass.copy(),
             walls=self.walls.copy(),
+            action_mask=self.action_mask.copy(),
             size=self.size,
             active_grass=self.active_grass
         )

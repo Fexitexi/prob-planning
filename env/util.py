@@ -1,3 +1,5 @@
+import random
+
 class Counter(dict):
     """
     A counter keeps track of counts for a set of keys.
@@ -213,7 +215,6 @@ class Counter(dict):
             addend[key] = -1 * y[key]
         return addend
 
-
 def sign(x):
     """
     Returns 1 or -1 depending on the sign of x
@@ -222,3 +223,7 @@ def sign(x):
         return 1
     else:
         return -1
+
+def flipCoin( p ):
+    r = random.random()
+    return r < p

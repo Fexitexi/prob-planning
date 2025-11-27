@@ -17,18 +17,19 @@ if __name__ == "__main__":
 
     # RL agent test
     q_agent = GardenerQAgent()
+    q_agent.startEpisode()
 
     while not done:
-        mask = obs["action_mask"]
-        valid_actions = [i for i in range(len(mask)) if mask[i] == 1]
-        action = random.choice(valid_actions)
-        gar = env.unwrapped
-        gar.sample(3, 500)
+        state = ObservationState.from_obs(obs)
+        action = q_agent.getAction(state)
+        #mask = obs["action_mask"]
+        #valid_actions = [i for i in range(len(mask)) if mask[i] == 1]
+        #action = random.choice(valid_actions)
+        #gar = env.unwrapped
+        #gar.sample(3, 500)
         #features = gar.get_features(action)
         #print(features)
         obs, reward, terminated, truncated, info = env.step(action)
-        state = ObservationState.from_obs(obs)
-
         env.render()
         time.sleep(1)
         done = terminated or truncated

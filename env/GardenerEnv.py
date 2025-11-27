@@ -31,6 +31,7 @@ class GardenerEnv(gym.Env):
         self._state.lake_timer = np.zeros(num_lakes, dtype=int)
         self._state.grass = np.full((num_grass, 2), -1, dtype=int)
         self._state.active_grass = 0
+        self._state.score = 0
 
         # Define what actions are available (4 directions + 1 do nothing)
         self.action_space = gym.spaces.Discrete(5)
@@ -102,6 +103,8 @@ class GardenerEnv(gym.Env):
         super().reset(seed=seed)
 
         self._dynamics = GardenerDynamics(seed=seed)
+
+        self._state.score = 0
 
         # Randomly place the agent anywhere on the grid
         self._state.agent = self.np_random.integers(0, self._state.size,
@@ -274,16 +277,25 @@ class GardenerEnv(gym.Env):
         # (could add a step limit here if desired)
         truncated = False
 
-        # The environment cannot terminate for now
-        terminated = False
-
         # Simple reward structure: +1 for reaching target, 0 otherwise
         # Alternative: could give small negative rewards for each step to
         # encourage efficiency
-        reward = 1 if grass_patch else -0.01
+        reward = 50 if grass_patch else 0
+
+        # Additional reward for being adjacent (Manhattan distance 1) to any lake
+        ax, ay = self._state.agent
+        for lx, ly in self._state.lakes:
+            if abs(ax - lx) + abs(ay - ly) == 1:
+                reward += 5
+                break
+
+        self._state.score += reward
 
         observation = self._get_obs()
         info = self._get_info()
+
+        # Terminate if point limit reached
+        terminated = True if self._state.score >= 300 else False
 
         return observation, reward, terminated, truncated, info
 
