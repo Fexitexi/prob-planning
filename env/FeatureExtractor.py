@@ -11,7 +11,8 @@ class FeatureExtractor:
             "mows_lawn": self.will_reach_target_after_action(state, action, "grass"),
             "sips_lake": self.will_reach_target_after_action(state, action, "lake"),
             "dist_lawn": self.shortest_path_after_action(state, action, "grass"),
-            "dist_lake": self.shortest_path_after_action(state, action, "lake"),}
+            "dist_lake": self.shortest_path_after_action(state, action, "lake"),
+        }
         return features
 
     def shortest_path_after_action(self, state, action, target_type):
@@ -39,8 +40,15 @@ class FeatureExtractor:
         if target_type == "grass":
             targets = [tuple(temp_state.grass[temp_state.active_grass])]
         elif target_type == "lake":
-            targets = [tuple(l) for i, l in enumerate(temp_state.lakes)
-                       if temp_state.lakes_full[i]]
+            targets = []
+            for (lx, ly), full in zip(temp_state.lakes, temp_state.lakes_full):
+                if not full:
+                    continue
+                for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+                    tx, ty = lx + dx, ly + dy
+                    if 0 <= tx < size and 0 <= ty < size:
+                        if (tx, ty) not in walls and (tx, ty) not in lakes:
+                            targets.append((tx, ty))
         else:
             return None
 
@@ -55,7 +63,13 @@ class FeatureExtractor:
             (x, y), d = q.popleft()
             if (x, y) in targets:
                 # normalize distance here to the instance size
-                return 1.0 - (d / (temp_state.size * temp_state.size))
+                if target_type == "grass":
+                    return 1 - (d / (size * size))
+                if target_type == "lake":
+                    if d < 5:
+                        return 1 - (d / 5)
+                    else:
+                        return 0.0
             for dx, dy in [(1,0), (-1,0), (0,1), (0,-1)]:
                 nx, ny = x + dx, y + dy
                 if 0 <= nx < size and 0 <= ny < size:
@@ -63,7 +77,7 @@ class FeatureExtractor:
                         continue
                     if (nx, ny) in walls:
                         continue
-                    if (nx, ny) in lakes and target_type != "lake":
+                    if (nx, ny) in lakes:
                         continue
                     visited.add((nx, ny))
                     q.append(((nx, ny), d + 1))

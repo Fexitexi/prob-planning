@@ -11,16 +11,16 @@ from env.state import GardenerState
 
 class GardenerEnv(gym.Env):
 
-    def __init__(self, size: int = 10):
+    def __init__(self, size: int = 15):
         # The size of the square grid (5x5 by default)
 
         # Initialize positions - will be set randomly in reset()
         # Using -1,-1 as "uninitialized" state
         self._state = GardenerState()
         self._state.size = size
-        num_frogs = max(1, int(size * size * 0.03))
-        num_lakes = max(1, int(size * size * 0.03))
-        num_grass = max(1, int(size * size * 0.03))
+        num_frogs = max(1, int(size * size * 0.01))
+        num_lakes = max(1, int(size * size * 0.02))
+        num_grass = max(1, int(size * size * 0.04))
         num_walls = int(size * size * 0.20)
         self._state.walls = np.full((num_walls, 2), -1, dtype=int)
 
@@ -172,6 +172,8 @@ class GardenerEnv(gym.Env):
             trial = wall_positions + [tuple(pos)]
             if is_accessible(trial):
                 wall_positions.append(tuple(pos))
+        if len(wall_positions) < len(self._state.walls):
+            return self.reset(seed=seed)
         self._state.walls = np.array(wall_positions, dtype=int)
 
         print("free candidates:", len(remaining_positions))
@@ -218,6 +220,7 @@ class GardenerEnv(gym.Env):
         # 2D array of positions
         self._state.frogs = np.array(frog_positions, dtype=int)
         self._state.lakes = np.array(lake_positions, dtype=int)
+        self._state.lake_timer = np.ones(len(self._state.lakes), dtype=int)
         self._state.grass = np.array(grass_positions, dtype=int)
         self._state.active_grass = self.np_random.integers(0, len(self._state.grass))
 
@@ -266,11 +269,11 @@ class GardenerEnv(gym.Env):
                     self._state.lakes_full[i] = True  # refill lake
 
             # Check adjacency to any frog (Manhattan distance 1)
-            for fx, fy in self._state.frogs:
-                if abs(fx - lx) + abs(fy - ly) == 1 and self._state.lakes_full[i]:
-                    self._state.lakes_full[i] = False
-                    self._state.lake_timer[i] = 5
-                    break
+            #for fx, fy in self._state.frogs:
+            #    if abs(fx - lx) + abs(fy - ly) == 1 and self._state.lakes_full[i]:
+            #        self._state.lakes_full[i] = False
+            #        self._state.lake_timer[i] = 20
+            #        break
 
             # Check adjacency to the agent (Manhattan distance 1)
             ax, ay = self._state.agent
@@ -278,7 +281,7 @@ class GardenerEnv(gym.Env):
                 # Additional reward for being adjacent (Manhattan distance 1) to any full lake
                 reward += 5
                 self._state.lakes_full[i] = False
-                self._state.lake_timer[i] = 5
+                self._state.lake_timer[i] = 20
 
         # We don't use truncation in this simple environment
         # (could add a step limit here if desired)
@@ -287,7 +290,7 @@ class GardenerEnv(gym.Env):
         # Simple reward structure: +1 for reaching target, 0 otherwise
         # Alternative: could give small negative rewards for each step to
         # encourage efficiency
-        reward += 50 if grass_patch else 0
+        reward += 10 if grass_patch else 0
 
         self._state.score += reward
 

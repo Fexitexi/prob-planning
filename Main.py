@@ -12,13 +12,15 @@ gym.envs.registration.register(
 
 if __name__ == "__main__":
     env = gym.make("GardenerEnv-v0")
-    numTraining = 500
+    numTraining = 100
     numTesting = 100
     q_agent = GardenerQAgent()
 
     while numTraining > 0 or numTesting > 0:
         if numTraining > 0:
             numTraining -= 1
+            if numTraining == 0:
+                q_agent.stopLearning()
         else:
             numTesting -= 1
         obs, info = env.reset()
