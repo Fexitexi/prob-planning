@@ -46,7 +46,6 @@ class GardenerQAgent:
         features = self.featExtractor.get_features(state, action)
         for key in self._weights:
             self._weights[key] += self.alpha * predictedReward * features[key]
-        print(self._weights)
 
     def getAction(self, state):
         """
@@ -120,3 +119,23 @@ class GardenerQAgent:
         # todo log
         #if self.episodesSoFar == 0:
         #    print('Beginning %d episodes of Training' % (self.numTraining))
+
+    def save_weights(self, filepath):
+        """
+        Save learned weights to a text file.
+        Each line is stored as: key<TAB>value
+        """
+        with open(filepath, "w") as f:
+            for key, value in self._weights.items():
+                f.write(f"{key}\t{value}\n")
+
+    def load_weights(self, filepath):
+        """
+        Load weights from a text file saved with save_weights.
+        """
+        self._weights.clear()
+        with open(filepath, "r") as f:
+            for line in f:
+                key, value = line.strip().split("\t")
+                self._weights[key] = float(value)
+        print(self._weights)
