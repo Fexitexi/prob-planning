@@ -46,7 +46,6 @@ class GardenerQAgent:
         features = self.featExtractor.get_features(state, action)
         for key in self._weights:
             self._weights[key] += self.alpha * predictedReward * features[key]
-        print(self._weights)
 
     def getAction(self, state):
         """

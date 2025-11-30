@@ -2,6 +2,7 @@ import gymnasium as gym
 import time
 import random
 
+from env.ASPTransformer import ASPTransformer
 from env.GardenerQAgent import GardenerQAgent
 from env.state import ObservationState
 
@@ -12,9 +13,11 @@ gym.envs.registration.register(
 
 if __name__ == "__main__":
     env = gym.make("GardenerEnv-v0")
-    numTraining = 100
+    numTraining = 0
     numTesting = 100
+    horizon = 3
     q_agent = GardenerQAgent()
+    asp_transformer = ASPTransformer()
     if numTraining == 0:
         q_agent.stopLearning()
         q_agent.load_weights("weights.pkl")
@@ -33,19 +36,14 @@ if __name__ == "__main__":
 
         # RL agent test
         state = ObservationState.from_obs(obs)
+        asp_transformer.build_static(state, horizon)
+
         q_agent.registerInitialState(state)
 
         print("Starting episode {}\n".format(numTraining))
 
         while not done:
             action = q_agent.getAction(state)
-            #mask = obs["action_mask"]
-            #valid_actions = [i for i in range(len(mask)) if mask[i] == 1]
-            #action = random.choice(valid_actions)
-            #gar = env.unwrapped
-            #gar.sample(3, 500)
-            #features = gar.get_features(action)
-            #print(features)
             obs, reward, terminated, truncated, info = env.step(action)
             state = ObservationState.from_obs(obs)
             q_agent.observeTransition(action, state, reward)
