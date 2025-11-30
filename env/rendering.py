@@ -26,8 +26,7 @@ class GardenerRenderer:
 
         # Draw grass patches
         for idx, (gx, gy) in enumerate(state.grass):
-            color = (0, 100, 0) if idx == state.active_grass else (150, 100,
-                                                                   50)
+            color = (0, 100, 0) if state.grass_active[idx] else (150, 100, 50)
             pygame.draw.rect(self.screen, color,
                              pygame.Rect(gx * self.cell_size,
                                          gy * self.cell_size, self.cell_size,

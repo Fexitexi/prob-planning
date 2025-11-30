@@ -30,7 +30,9 @@ class GardenerEnv(gym.Env):
         self._state.lakes_full = np.ones(num_lakes, dtype=bool)
         self._state.lake_timer = np.zeros(num_lakes, dtype=int)
         self._state.grass = np.full((num_grass, 2), -1, dtype=int)
-        self._state.active_grass = 0
+        # Each grass patch starts active. A timer is used for reactivation.
+        self._state.grass_active = np.ones(num_grass, dtype=bool)
+        self._state.grass_timer = np.zeros(num_grass, dtype=int)
         self._state.score = 0
 
         # Define what actions are available (4 directions + 1 do nothing)
@@ -50,7 +52,8 @@ class GardenerEnv(gym.Env):
                                           dtype=bool),
              "grass": gym.spaces.Box(0, size - 1, shape=(num_grass, 2),
                                      dtype=int),
-             "active_grass": gym.spaces.Discrete(num_grass),
+             "grass_active": gym.spaces.Box(0, 1, shape=(num_grass,), dtype=bool),
+             "grass_timer": gym.spaces.Box(0, 10, shape=(num_grass,), dtype=int),
              "walls": gym.spaces.Box(0, size - 1, shape=(num_walls, 2),
                                      dtype=int),
              "action_mask": gym.spaces.Box(0, 1, shape=(self.action_space.n,),
@@ -73,7 +76,8 @@ class GardenerEnv(gym.Env):
                 "lakes": self._state.lakes,
                 "lakes_full": self._state.lakes_full,
                 "grass": self._state.grass,
-                "active_grass": self._state.active_grass,
+                "grass_active": self._state.grass_active,
+                "grass_timer": self._state.grass_timer,
                 "walls": self._state.walls,
                 "action_mask": self._dynamics.get_action_mask(self._state,
                                                               self._state.agent)}
@@ -85,7 +89,7 @@ class GardenerEnv(gym.Env):
             dict: Info with distance between agent and target
         """
         return {"distance": np.linalg.norm(
-            self._state.agent - self._state.grass[self._state.active_grass],
+            self._state.agent - self._state.grass[self._state.grass_active.argmax()],
             ord=1)}
 
     def reset(self, seed: Optional[int] = None,
@@ -222,7 +226,8 @@ class GardenerEnv(gym.Env):
         self._state.lakes = np.array(lake_positions, dtype=int)
         self._state.lake_timer = np.ones(len(self._state.lakes), dtype=int)
         self._state.grass = np.array(grass_positions, dtype=int)
-        self._state.active_grass = self.np_random.integers(0, len(self._state.grass))
+        self._state.grass_active[:] = True
+        self._state.grass_timer[:] = 0
 
         observation = self._get_obs()
         info = self._get_info()
@@ -256,9 +261,24 @@ class GardenerEnv(gym.Env):
             tuple: (observation, reward, terminated, truncated, info)
         """
         grass_patch = self._dynamics.move_agent(self._state, action)
-        self._dynamics.move_frogs(self._state)
 
         reward = 0
+
+        # Update grass states
+        for i, (gx, gy) in enumerate(self._state.grass):
+            ax, ay = self._state.agent
+            if ax == gx and ay == gy:
+                if self._state.grass_active[i]:
+                    self._state.grass_active[i] = False
+                    reward += 10
+                    self._state.grass_timer[i] = 50
+            else:
+                if not self._state.grass_active[i] and self._state.grass_timer[i] > 0:
+                    self._state.grass_timer[i] -= 1
+                    if self._state.grass_timer[i] == 0:
+                        self._state.grass_active[i] = True
+
+        self._dynamics.move_frogs(self._state)
 
         # Update lake states based on frog adjacency
         for i, (lx, ly) in enumerate(self._state.lakes):
@@ -286,11 +306,6 @@ class GardenerEnv(gym.Env):
         # We don't use truncation in this simple environment
         # (could add a step limit here if desired)
         truncated = False
-
-        # Simple reward structure: +1 for reaching target, 0 otherwise
-        # Alternative: could give small negative rewards for each step to
-        # encourage efficiency
-        reward += 10 if grass_patch else 0
 
         self._state.score += reward
 

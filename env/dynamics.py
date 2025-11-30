@@ -52,14 +52,12 @@ class GardenerDynamics:
         # np.clip prevents the agent from walking off the edge
         state.agent = state.agent + direction
 
-        # Check if agent reached the active grass patch
-        terminated = np.array_equal(state.agent,
-                                    state.grass[state.active_grass])
-
-        if terminated:
-            choices = [i for i in range(len(state.grass)) if
-                       i != state.active_grass]
-            state.active_grass = self.np_random.choice(choices)
+        # Check if agent reached any active grass patch
+        terminated = False
+        for (gx, gy), active in zip(state.grass, state.grass_active):
+            if active and np.array_equal(state.agent, np.array([gx, gy])):
+                terminated = True
+                break
 
         return terminated
 

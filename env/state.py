@@ -11,18 +11,20 @@ class GardenerState:
     lake_best_step: np.ndarray
     lake_timer: np.ndarray
     grass: np.ndarray
+    grass_active: np.ndarray
+    grass_timer: np.ndarray
     walls: np.ndarray
     size: int
     score: int
-    active_grass: int
 
     def fast_clone(self):
         new = GardenerState()
         new.size = self.size
         new.score = self.score
-        new.active_grass = self.active_grass
         new.agent = self.agent.copy()
         new.grass = self.grass.copy()
+        new.grass_active = self.grass_active.copy()
+        new.grass_timer = self.grass_timer.copy()
         new.walls = self.walls.copy()
         new.frogs = self.frogs.copy()
         new.lakes = self.lakes.copy()
@@ -39,10 +41,11 @@ class ObservationState:
     lakes: np.ndarray
     lakes_full: np.ndarray
     grass: np.ndarray
+    grass_active: np.ndarray
+    grass_timer: np.ndarray
     walls: np.ndarray
     action_mask: np.ndarray
     size: int
-    active_grass: int
 
     @staticmethod
     def from_obs(obs):
@@ -52,7 +55,8 @@ class ObservationState:
             lakes=obs["lakes"],
             lakes_full=obs["lakes_full"],
             grass=obs["grass"],
-            active_grass=obs["active_grass"],
+            grass_active=obs["grass_active"],
+            grass_timer=obs["grass_timer"],
             walls=obs["walls"],
             action_mask=obs["action_mask"],
             size=obs["size"]
@@ -65,8 +69,9 @@ class ObservationState:
             lakes=self.lakes.copy(),
             lakes_full=self.lakes_full.copy(),
             grass=self.grass.copy(),
+            grass_active=self.grass_active.copy(),
+            grass_timer=self.grass_timer.copy(),
             walls=self.walls.copy(),
             action_mask=self.action_mask.copy(),
-            size=self.size,
-            active_grass=self.active_grass
+            size=self.size
         )

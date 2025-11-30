@@ -38,7 +38,10 @@ class FeatureExtractor:
 
         # choose target set
         if target_type == "grass":
-            targets = [tuple(temp_state.grass[temp_state.active_grass])]
+            targets = []
+            for (gx, gy), active in zip(temp_state.grass, temp_state.grass_active):
+                if active:
+                    targets.append((gx, gy))
         elif target_type == "lake":
             targets = []
             for (lx, ly), full in zip(temp_state.lakes, temp_state.lakes_full):
@@ -97,8 +100,10 @@ class FeatureExtractor:
         ax, ay = temp_state.agent
 
         if target_type == "grass":
-            gx, gy = temp_state_prev.grass[temp_state_prev.active_grass]
-            return 1.0 if (ax, ay) == (gx, gy) else 0.0
+            for (gx, gy), active in zip(temp_state_prev.grass, temp_state_prev.grass_active):
+                if active and (ax, ay) == (gx, gy):
+                    return 1.0
+            return 0.0
 
         if target_type == "lake":
             for i, (lx, ly) in enumerate(temp_state_prev.lakes):
