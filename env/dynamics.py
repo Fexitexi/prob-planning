@@ -17,7 +17,7 @@ class GardenerDynamics:
                                      4: np.array([0, 0]),  # Do nothing
                                      }
 
-    def __init__(self, seed):
+    def __init__(self, seed=None):
         if seed is None:
             seed = np.random.SeedSequence().entropy
         self.np_random = np.random.Generator(np.random.PCG64(seed))

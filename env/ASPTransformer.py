@@ -1,3 +1,8 @@
+import clingo
+
+from env.dynamics import GardenerDynamics
+
+
 class ASPTransformer:
     """
     Transform a GardenerState into an ASP program with:
@@ -5,8 +10,11 @@ class ASPTransformer:
       - variable atoms   (agent, grass_timer, lake_timer)
     """
 
-    def __init__(self):
-        self.static = None
+    def __init__(self, q_agent):
+        self._static = None
+        self._state = None
+        self._dynamics = GardenerDynamics()
+        self._q_agent = q_agent
 
     def build_static(self, state, horizon) -> str:
         lines = []
@@ -40,6 +48,7 @@ class ASPTransformer:
         return "\n".join(lines)
 
     def build_dynamic(self, state) -> str:
+        self._state = state
         lines = []
 
         # agent position
@@ -57,4 +66,41 @@ class ASPTransformer:
             line += f"grass_timer({i}, {c}, 0)."
         lines.append(line)
 
-        print("\n".join(lines))
+        return "\n".join(lines)
+
+    def call_clingo(self, static, dynamic):
+        with open("fixed.lp", "r") as f:
+            fixed_program = f.read()
+        ctl = clingo.Control()
+
+        ctl.add("base", [], f"{static}\n{dynamic}\n{fixed_program}\n")
+        ctl.ground([("base", [])], context=self)
+        ctl.solve(on_model=on_model)
+
+    def compute_reward(self, h):
+        actions = []
+        history = h.number
+        while history > 0:
+            actions.append(history % 10)
+            history //= 10
+        state = self._state.fast_clone()
+        actions.pop()
+        success = True
+        while len(actions) > 1:
+            action = actions.pop()
+            try:
+                self._dynamics.move_agent(state, action)
+            except:
+                success = False
+                break
+        if success:
+            try:
+                value = self._q_agent.getQValue(state, actions[0])
+                return clingo.Number(int(value * 10))
+            except:
+                return clingo.Number(0)
+        else:
+            return clingo.Number(0)
+
+def on_model(m):
+    print(m)

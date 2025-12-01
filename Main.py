@@ -17,7 +17,7 @@ if __name__ == "__main__":
     numTesting = 100
     horizon = 3
     q_agent = GardenerQAgent()
-    asp_transformer = ASPTransformer()
+    asp_transformer = ASPTransformer(q_agent)
     if numTraining == 0:
         q_agent.stopLearning()
         q_agent.load_weights("weights.pkl")
@@ -36,7 +36,7 @@ if __name__ == "__main__":
 
         # RL agent test
         state = ObservationState.from_obs(obs)
-        asp_transformer.build_static(state, horizon)
+        static = asp_transformer.build_static(state, horizon)
 
         q_agent.registerInitialState(state)
 
@@ -46,7 +46,9 @@ if __name__ == "__main__":
             action = q_agent.getAction(state)
             obs, reward, terminated, truncated, info = env.step(action)
             state = ObservationState.from_obs(obs)
-            asp_transformer.build_dynamic(state)
+            dynamic = asp_transformer.build_dynamic(state)
+            asp_transformer.call_clingo(static, dynamic)
+            exit(-1)
             q_agent.observeTransition(action, state, reward)
             env.render()
             if numTraining == 0:
