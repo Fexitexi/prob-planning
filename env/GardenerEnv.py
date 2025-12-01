@@ -246,17 +246,22 @@ class GardenerEnv(gym.Env):
     def sample(self, horizon, size):
         # create a copy of current random variable that does not influence og
         np_random = np.random.Generator(self.np_random.bit_generator.jumped())
-
+        samples = []
         start_time = time.time()
 
         for i in range(size):
             # deep copy of full environment state
             state = self._state.fast_clone()
+            world = [state.fast_clone()]
             for h in range(horizon):
                 self._dynamics.move_frogs(state)
+                world.append(state.fast_clone())
+            samples.append(world)
 
         elapsed = time.time() - start_time
         print(f"sample() took {elapsed:.6f} seconds for size={size}, horizon={horizon}")
+
+        return samples
 
 
     def step(self, action):

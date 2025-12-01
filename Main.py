@@ -13,9 +13,11 @@ gym.envs.registration.register(
 
 if __name__ == "__main__":
     env = gym.make("GardenerEnv-v0")
+    gar = env.unwrapped
     numTraining = 0
     numTesting = 100
     horizon = 3
+    sample_size = 100
     q_agent = GardenerQAgent()
     asp_transformer = ASPTransformer(q_agent)
     if numTraining == 0:
@@ -43,12 +45,28 @@ if __name__ == "__main__":
         print("Starting episode {}\n".format(numTraining))
 
         while not done:
-            action = q_agent.getAction(state)
+            #sampling
+            samples = gar.sample(horizon, sample_size)
+            worlds = asp_transformer.build_worlds(samples)
+
+            #clingo
+            dynamic = asp_transformer.build_dynamic(state)
+            for i in range(5):
+                try:
+                    value = q_agent.getQValue(state, i)
+                    print(f"Action {i}: {value}")
+                except:
+                    pass
+            action = asp_transformer.call_clingo(static, dynamic, worlds)
+
+
+            test_action = q_agent.getBestActions(state)
+            if action not in test_action:
+                msg = f"ASP overruled Q-learning action: {action} vs {test_action}"
+                print(f"\033[31m{msg}\033[0m")
+
             obs, reward, terminated, truncated, info = env.step(action)
             state = ObservationState.from_obs(obs)
-            dynamic = asp_transformer.build_dynamic(state)
-            asp_transformer.call_clingo(static, dynamic)
-            exit(-1)
             q_agent.observeTransition(action, state, reward)
             env.render()
             if numTraining == 0:

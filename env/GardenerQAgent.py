@@ -83,6 +83,19 @@ class GardenerQAgent:
         #print(f"Best actions: {bestActions}, value: {maxValue}")
         return random.choice(bestActions)[0]
 
+    def getBestActions(self, state):
+        actionValuePairs = [(action, self.getQValue(state, action))
+                            for action in np.where(state.action_mask == 1)[0]]
+        if actionValuePairs == []:
+            return None
+        maxValue = max(actionValuePairs, key=lambda x: x[1])[1]
+
+        # Filter into list with same max value.
+        bestActions = list(
+            filter(lambda x: x[1] == maxValue, actionValuePairs))
+        first_elements = [a for (a, _) in bestActions]
+        return first_elements
+
     def observeTransition(self, action, nextState, deltaReward):
         """
             Called by the environment after each step
