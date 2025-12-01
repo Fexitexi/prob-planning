@@ -46,6 +46,7 @@ if __name__ == "__main__":
             action = q_agent.getAction(state)
             obs, reward, terminated, truncated, info = env.step(action)
             state = ObservationState.from_obs(obs)
+            asp_transformer.build_dynamic(state)
             q_agent.observeTransition(action, state, reward)
             env.render()
             if numTraining == 0:

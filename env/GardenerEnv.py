@@ -11,13 +11,15 @@ from env.state import GardenerState
 
 class GardenerEnv(gym.Env):
 
-    def __init__(self, size: int = 15):
+    def __init__(self, size: int = 15, grass_respawn: int = 50, lake_respawn: int = 20):
         # The size of the square grid (5x5 by default)
 
         # Initialize positions - will be set randomly in reset()
         # Using -1,-1 as "uninitialized" state
         self._state = GardenerState()
         self._state.size = size
+        self._state.grass_respawn = grass_respawn
+        self._state.lake_respawn = lake_respawn
         num_frogs = max(1, int(size * size * 0.01))
         num_lakes = max(1, int(size * size * 0.02))
         num_grass = max(1, int(size * size * 0.04))
@@ -48,12 +50,15 @@ class GardenerEnv(gym.Env):
              "lakes": gym.spaces.Box(0, size - 1, shape=(num_lakes, 2),
                                      dtype=int),  # array of [x, y] coordinates
              "size": gym.spaces.Discrete(size + 1),
+             "grass_respawn": gym.spaces.Discrete(grass_respawn + 1),
+             "lake_respawn": gym.spaces.Discrete(lake_respawn + 1),
              "lakes_full": gym.spaces.Box(0, 1, shape=(num_lakes,),
                                           dtype=bool),
+             "lake_timer": gym.spaces.Box(0, lake_respawn, shape=(num_lakes,), dtype=int),
              "grass": gym.spaces.Box(0, size - 1, shape=(num_grass, 2),
                                      dtype=int),
              "grass_active": gym.spaces.Box(0, 1, shape=(num_grass,), dtype=bool),
-             "grass_timer": gym.spaces.Box(0, 10, shape=(num_grass,), dtype=int),
+             "grass_timer": gym.spaces.Box(0, grass_respawn, shape=(num_grass,), dtype=int),
              "walls": gym.spaces.Box(0, size - 1, shape=(num_walls, 2),
                                      dtype=int),
              "action_mask": gym.spaces.Box(0, 1, shape=(self.action_space.n,),
@@ -73,8 +78,11 @@ class GardenerEnv(gym.Env):
         return {"agent": self._state.agent,
                 "frogs": self._state.frogs,
                 "size": self._state.size,
+                "lake_respawn": self._state.lake_respawn,
+                "grass_respawn": self._state.grass_respawn,
                 "lakes": self._state.lakes,
                 "lakes_full": self._state.lakes_full,
+                "lake_timer": self._state.lake_timer,
                 "grass": self._state.grass,
                 "grass_active": self._state.grass_active,
                 "grass_timer": self._state.grass_timer,
@@ -271,7 +279,7 @@ class GardenerEnv(gym.Env):
                 if self._state.grass_active[i]:
                     self._state.grass_active[i] = False
                     reward += 10
-                    self._state.grass_timer[i] = 50
+                    self._state.grass_timer[i] = self._state.grass_respawn
             else:
                 if not self._state.grass_active[i] and self._state.grass_timer[i] > 0:
                     self._state.grass_timer[i] -= 1
@@ -301,7 +309,7 @@ class GardenerEnv(gym.Env):
                 # Additional reward for being adjacent (Manhattan distance 1) to any full lake
                 reward += 5
                 self._state.lakes_full[i] = False
-                self._state.lake_timer[i] = 20
+                self._state.lake_timer[i] = self._state.lake_respawn
 
         # We don't use truncation in this simple environment
         # (could add a step limit here if desired)

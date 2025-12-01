@@ -16,6 +16,15 @@ agent(X,Y,T) :- agent(X,Y,T), action(4,T).    % do nothing
 :- agent(X,Y,T), wall(X,Y).
 :- agent(X,Y,T), lake(X,Y,I).
 
+% timer
+grass_timer(I,C-1,T+1) :- grass_timer(I,C,T), C!=0, T<horizon.
+grass_timer(I,0,T+1) :- grass_timer(I,0,T), grass(X,Y,I), not agent(X,Y,T).
+grass_timer(I,grass_respawn,T+1) :- grass_timer(I,0,T), grass(X,Y,I), agent(X,Y,T).
+lake_agent_prox(I,T) :- lake(X1,Y1,I), agent(X2,Y2,T), |X1 - X2| <= 1, |Y1 - Y2| <= 1.
+lake_timer(I,C-1,T+1) :- lake_timer(I,C,T), C!=0, T<horizon.
+lake_timer(I,0,T+1) :- lake_timer(I,0,T), not lake_agent_prox(I,T).
+lake_timer(I,lake_respawn,T+1) :- lake_timer(I,0,T), lake_agent_prox(I,T).
+
 
 %%% OPTIMIZATION %%%
 

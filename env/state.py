@@ -15,11 +15,15 @@ class GardenerState:
     grass_timer: np.ndarray
     walls: np.ndarray
     size: int
+    grass_respawn: int
+    lake_respawn: int
     score: int
 
     def fast_clone(self):
         new = GardenerState()
         new.size = self.size
+        new.grass_respawn = self.grass_respawn
+        new.lake_respawn = self.lake_respawn
         new.score = self.score
         new.agent = self.agent.copy()
         new.grass = self.grass.copy()
@@ -40,12 +44,15 @@ class ObservationState:
     frogs: np.ndarray
     lakes: np.ndarray
     lakes_full: np.ndarray
+    lake_timer: np.ndarray
     grass: np.ndarray
     grass_active: np.ndarray
     grass_timer: np.ndarray
     walls: np.ndarray
     action_mask: np.ndarray
     size: int
+    grass_respawn: int
+    lake_respawn: int
 
     @staticmethod
     def from_obs(obs):
@@ -54,12 +61,15 @@ class ObservationState:
             frogs=obs["frogs"],
             lakes=obs["lakes"],
             lakes_full=obs["lakes_full"],
+            lake_timer=obs["lake_timer"],
             grass=obs["grass"],
             grass_active=obs["grass_active"],
             grass_timer=obs["grass_timer"],
             walls=obs["walls"],
             action_mask=obs["action_mask"],
-            size=obs["size"]
+            size=obs["size"],
+            grass_respawn=obs["grass_respawn"],
+            lake_respawn=obs["lake_respawn"]
         )
 
     def fast_clone(self):
@@ -68,10 +78,13 @@ class ObservationState:
             frogs=self.frogs.copy(),
             lakes=self.lakes.copy(),
             lakes_full=self.lakes_full.copy(),
+            lake_timer=self.lake_timer.copy(),
             grass=self.grass.copy(),
             grass_active=self.grass_active.copy(),
             grass_timer=self.grass_timer.copy(),
             walls=self.walls.copy(),
             action_mask=self.action_mask.copy(),
-            size=self.size
+            size=self.size,
+            grass_respawn=self.grass_respawn,
+            lake_respawn=self.lake_respawn,
         )

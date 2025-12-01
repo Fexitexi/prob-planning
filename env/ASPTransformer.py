@@ -14,20 +14,47 @@ class ASPTransformer:
         # constants
         lines.append(f"#const size={state.size}.")
         lines.append(f"#const horizon={horizon}.")
+        lines.append(f"#const grass_respawn={state.grass_respawn}.")
+        lines.append(f"#const lake_respawn={state.lake_respawn}.")
         lines.append("")
 
         # constant atoms: walls
+        line = ""
         for (c, r) in state.walls:
-            lines.append(f"wall({c}, {r}).")
+            line += f"wall({c}, {r})."
+        lines.append(line)
 
         # constant atoms: lakes
+        line = ""
         for i, (c, r) in enumerate(state.lakes):
-            lines.append(f"lake({c}, {r}, {i}).")
+            line += f"lake({c}, {r}, {i})."
+        lines.append(line)
 
         # constant atoms: grass
+        line = ""
         for i, (c, r) in enumerate(state.grass):
-            lines.append(f"grass({c}, {r}, {i}).")
+            line += f"grass({c}, {r}, {i})."
+        lines.append(line)
 
         self.static = "\n".join(lines)
-        print(self.static)
         return "\n".join(lines)
+
+    def build_dynamic(self, state) -> str:
+        lines = []
+
+        # agent position
+        lines.append(f"agent({state.agent[0]}, {state.agent[1]}, 0).")
+
+        # lake timer
+        line = ""
+        for i, c in enumerate(state.lake_timer):
+            line += f"lake_timer({i}, {c}, 0)."
+        lines.append(line)
+
+        # grass timer
+        line = ""
+        for i, c in enumerate(state.grass_timer):
+            line += f"grass_timer({i}, {c}, 0)."
+        lines.append(line)
+
+        print("\n".join(lines))
