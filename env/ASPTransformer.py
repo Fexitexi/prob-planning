@@ -98,7 +98,7 @@ class ASPTransformer:
                 if sym.arguments[1].number == 0:
                     first_action = sym.arguments[0].number
                     break
-        print(f"First action: {first_action}")
+        #print(f"First action: {first_action}")
         return first_action
 
     def compute_reward(self, h):

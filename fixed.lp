@@ -11,7 +11,7 @@ history(H,0) :- action(A,0), H = 10 + A.
 history(H,T) :- history(H',T-1), action(A,T), H = H' * 10 + A.
 
 % compute reward
-action_reward(@compute_reward(H) + horizon - H, T) :- history(H, T).
+action_reward(@compute_reward(H), T) :- history(H, T).
 
 % can't leave the grid
 :- agent(X,Y,T), X < 0.
@@ -36,9 +36,9 @@ action_reward(@compute_reward(H) + horizon - H, T) :- history(H, T).
 %%% OPTIMIZATION %%%
 
 % try not to step onto frogs
-:~ agent(X,Y,T), frog(X,Y,I,T,W). [1@2]
+:~ agent(X,Y,T), frog(X,Y,I,T,W). [1@ horizon +1]
 
-#maximize {R@1 : action_reward(R,T)}.
+#maximize {R@ horizon-T : action_reward(R,T)}.
 #show history/2.
 #show action_reward/2.
 #show action/2.

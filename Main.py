@@ -15,7 +15,7 @@ if __name__ == "__main__":
     env = gym.make("GardenerEnv-v0")
     gar = env.unwrapped
     numTraining = 0
-    numTesting = 100
+    numTesting = 10
     horizon = 3
     sample_size = 100
     q_agent = GardenerQAgent()
@@ -42,7 +42,10 @@ if __name__ == "__main__":
 
         q_agent.registerInitialState(state)
 
-        print("Starting episode {}\n".format(numTraining))
+        print("Starting episode {}\n".format(numTraining + numTesting))
+
+        interceptions = 0
+        frog_kills = 0
 
         while not done:
             #sampling
@@ -51,19 +54,26 @@ if __name__ == "__main__":
 
             #clingo
             dynamic = asp_transformer.build_dynamic(state)
-            for i in range(5):
-                try:
-                    value = q_agent.getQValue(state, i)
-                    print(f"Action {i}: {value}")
-                except:
-                    pass
             action = asp_transformer.call_clingo(static, dynamic, worlds)
 
 
             test_action = q_agent.getBestActions(state)
+            #action = random.choice(test_action)
             if action not in test_action:
-                msg = f"ASP overruled Q-learning action: {action} vs {test_action}"
+                interceptions += 1
+                clean = [x.item() for x in test_action]
+                msg = f"ASP overruled Q-learning action: {action} vs {clean}"
                 print(f"\033[31m{msg}\033[0m")
+                for i in range(5):
+                    try:
+                        value = q_agent.getQValue(state, i)
+                        print(f"Action {i}: {value}")
+                    except:
+                        pass
+
+            for frog in state.frogs:
+                if state.agent[0] == frog[0] and state.agent[1] == frog[1]:
+                    frog_kills += 1
 
             obs, reward, terminated, truncated, info = env.step(action)
             state = ObservationState.from_obs(obs)
@@ -73,4 +83,5 @@ if __name__ == "__main__":
                 time.sleep(0.5)
             done = terminated or truncated
 
+    print(f"Interceptions: {interceptions}, Frog kills: {frog_kills}")
     env.close()

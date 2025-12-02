@@ -188,8 +188,8 @@ class GardenerEnv(gym.Env):
             return self.reset(seed=seed)
         self._state.walls = np.array(wall_positions, dtype=int)
 
-        print("free candidates:", len(remaining_positions))
-        print("accepted:", len(wall_positions))
+        #print("free candidates:", len(remaining_positions))
+        #print("accepted:", len(wall_positions))
 
         # -------------------------------------------------------------
         # Precompute shortest-path distance and best-step fields
@@ -259,7 +259,7 @@ class GardenerEnv(gym.Env):
             samples.append(world)
 
         elapsed = time.time() - start_time
-        print(f"sample() took {elapsed:.6f} seconds for size={size}, horizon={horizon}")
+        #print(f"sample() took {elapsed:.6f} seconds for size={size}, horizon={horizon}")
 
         return samples
 

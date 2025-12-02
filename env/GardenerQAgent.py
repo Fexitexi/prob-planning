@@ -151,4 +151,4 @@ class GardenerQAgent:
             for line in f:
                 key, value = line.strip().split("\t")
                 self._weights[key] = float(value)
-        print(self._weights)
+        #print(self._weights)
