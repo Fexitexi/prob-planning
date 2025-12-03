@@ -58,12 +58,16 @@ if __name__ == "__main__":
 
         while not done:
             #sampling
-            samples = gar.sample(horizon, sample_size, q_agent)
+            samples = gar.sample(horizon, sample_size)
             worlds = asp_transformer.build_worlds(samples)
 
             #clingo
             dynamic = asp_transformer.build_dynamic(state)
-            action = asp_transformer.call_clingo(static, dynamic, worlds)
+            actions = asp_transformer.call_clingo(static, dynamic, worlds, horizon)
+
+            action = actions[0]
+
+            gar.check_violations(actions, samples, q_agent)
 
 
             test_action = q_agent.getBestActions(state)

@@ -83,28 +83,25 @@ class ASPTransformer:
         return "\n".join(lines)
 
 
-    def call_clingo(self, static, dynamic, worlds):
+    def call_clingo(self, static, dynamic, worlds, horizon):
         start_time = time.time()
         self._latest_model = None
         with open("fixed.lp", "r") as f:
             fixed_program = f.read()
         ctl = clingo.Control()
 
-        ctl.add("base", [], f"{static}\n{dynamic}\n{worlds}\n{fixed_program}\n")
+        ctl.add("base", [], f"{static}\n{dynamic}\n{worlds}\n{fixed_program}")
         ctl.ground([("base", [])], context=self)
         ctl.solve(on_model=self.on_model)
-        #print(self._latest_model)
-        first_action = None
+        actions = [-1] * horizon
         for sym in self._latest_model:
             if sym.name == "action" and len(sym.arguments) == 2:
-                if sym.arguments[1].number == 0:
-                    first_action = sym.arguments[0].number
-                    break
+                actions[sym.arguments[1].number] = sym.arguments[0].number
         #print(f"First action: {first_action}")
 
         elapsed = time.time() - start_time
         #print(f"clingo took {elapsed:.6f} seconds")
-        return first_action
+        return actions
 
     def compute_reward(self, h):
         actions = []

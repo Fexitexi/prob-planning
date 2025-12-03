@@ -239,45 +239,59 @@ class GardenerEnv(gym.Env):
         return observation, info
 
 
-    def sample(self, horizon, size, q_agent):
+    def sample(self, horizon, size):
         # create a copy of current random variable that does not influence og
         np_random = np.random.Generator(self.np_random.bit_generator.jumped())
-        frog_kills = 0
 
         samples = []
         start_time = time.time()
 
-        actions = []
-        state = self._state.fast_clone()
-        for i in range(horizon):
-            action = q_agent.getAction(state)
-            self._dynamics.move_agent(state, action)
-            self._dynamics.move_frogs(state)
-            self.update_env(state, 0)
-            actions.append(action)
-
         for i in range(size):
-            killed_frog = False
             # deep copy of full environment state
             state = self._state.fast_clone()
             world = [state.fast_clone()]
             for h in range(horizon):
-                self._dynamics.move_agent(state, actions[h])
                 self._dynamics.move_frogs(state)
-                self.update_env(state, 0)
                 world.append(state.fast_clone())
-                if np.any(np.all(state.agent == state.frogs, axis=1)):
-                    killed_frog = True
             samples.append(world)
-            if killed_frog:
-                frog_kills += 1
-
-        print(f"Average number of frog kills: {frog_kills / size:.2f}")
 
         elapsed = time.time() - start_time
         print(f"sample() took {elapsed:.6f} seconds for size={size}, horizon={horizon}")
 
         return samples
+
+    def check_violations(self, actions, samples, q_agent):
+        frogs_killed_rl = 0
+        frogs_killed_asp = 0
+        state_rl = self._state.fast_clone()
+        state_asp = self._state.fast_clone()
+
+        positions_asp = [state_asp.agent]
+        positions_rl = [state_rl.agent]
+        for i in range(len(actions)):
+            action_rl = q_agent.getAction(state_rl)
+            action_asp = actions[i]
+            self._dynamics.move_agent(state_rl, action_rl)
+            self._dynamics.move_agent(state_asp, action_asp)
+            positions_asp.append(state_asp.agent)
+            positions_rl.append(state_rl.agent)
+
+        for world in samples:
+            killed_frog_rl = False
+            killed_frog_asp = False
+            for i, state in enumerate(world):
+                if np.any(np.all(positions_rl[i] == state.frogs, axis=1)):
+                    killed_frog_rl = True
+                if np.any(np.all(positions_asp[i] == state.frogs, axis=1)):
+                    killed_frog_asp = True
+            if killed_frog_rl:
+                frogs_killed_rl += 1
+            if killed_frog_asp:
+                frogs_killed_asp += 1
+
+        print(f"Average number of frog kills (ASP): {frogs_killed_asp / len(samples):.2f}")
+        print(f"Average number of frog kills (RL): {frogs_killed_rl / len(samples):.2f}")
+
 
 
     def step(self, action):
