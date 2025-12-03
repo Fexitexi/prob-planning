@@ -49,7 +49,6 @@ class ObservationState:
     grass_active: np.ndarray
     grass_timer: np.ndarray
     walls: np.ndarray
-    action_mask: np.ndarray
     size: int
     grass_respawn: int
     lake_respawn: int
@@ -66,7 +65,6 @@ class ObservationState:
             grass_active=obs["grass_active"],
             grass_timer=obs["grass_timer"],
             walls=obs["walls"],
-            action_mask=obs["action_mask"],
             size=obs["size"],
             grass_respawn=obs["grass_respawn"],
             lake_respawn=obs["lake_respawn"]
@@ -83,7 +81,6 @@ class ObservationState:
             grass_active=self.grass_active.copy(),
             grass_timer=self.grass_timer.copy(),
             walls=self.walls.copy(),
-            action_mask=self.action_mask.copy(),
             size=self.size,
             grass_respawn=self.grass_respawn,
             lake_respawn=self.lake_respawn,

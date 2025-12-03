@@ -61,8 +61,6 @@ class GardenerEnv(gym.Env):
              "grass_timer": gym.spaces.Box(0, grass_respawn, shape=(num_grass,), dtype=int),
              "walls": gym.spaces.Box(0, size - 1, shape=(num_walls, 2),
                                      dtype=int),
-             "action_mask": gym.spaces.Box(0, 1, shape=(self.action_space.n,),
-                                           dtype=np.int8),
              })
 
 
@@ -86,9 +84,7 @@ class GardenerEnv(gym.Env):
                 "grass": self._state.grass,
                 "grass_active": self._state.grass_active,
                 "grass_timer": self._state.grass_timer,
-                "walls": self._state.walls,
-                "action_mask": self._dynamics.get_action_mask(self._state,
-                                                              self._state.agent)}
+                "walls": self._state.walls}
 
     def _get_info(self):
         """Compute auxiliary information for debugging.
@@ -243,23 +239,43 @@ class GardenerEnv(gym.Env):
         return observation, info
 
 
-    def sample(self, horizon, size):
+    def sample(self, horizon, size, q_agent):
         # create a copy of current random variable that does not influence og
         np_random = np.random.Generator(self.np_random.bit_generator.jumped())
+        frog_kills = 0
+
         samples = []
         start_time = time.time()
 
+        actions = []
+        state = self._state.fast_clone()
+        for i in range(horizon):
+            action = q_agent.getAction(state)
+            self._dynamics.move_agent(state, action)
+            self._dynamics.move_frogs(state)
+            self.update_env(state, 0)
+            actions.append(action)
+
         for i in range(size):
+            killed_frog = False
             # deep copy of full environment state
             state = self._state.fast_clone()
             world = [state.fast_clone()]
             for h in range(horizon):
+                self._dynamics.move_agent(state, actions[h])
                 self._dynamics.move_frogs(state)
+                self.update_env(state, 0)
                 world.append(state.fast_clone())
+                if np.any(np.all(state.agent == state.frogs, axis=1)):
+                    killed_frog = True
             samples.append(world)
+            if killed_frog:
+                frog_kills += 1
+
+        print(f"Average number of frog kills: {frog_kills / size:.2f}")
 
         elapsed = time.time() - start_time
-        #print(f"sample() took {elapsed:.6f} seconds for size={size}, horizon={horizon}")
+        print(f"sample() took {elapsed:.6f} seconds for size={size}, horizon={horizon}")
 
         return samples
 
@@ -273,48 +289,14 @@ class GardenerEnv(gym.Env):
         Returns:
             tuple: (observation, reward, terminated, truncated, info)
         """
-        grass_patch = self._dynamics.move_agent(self._state, action)
 
         reward = 0
 
-        # Update grass states
-        for i, (gx, gy) in enumerate(self._state.grass):
-            ax, ay = self._state.agent
-            if ax == gx and ay == gy:
-                if self._state.grass_active[i]:
-                    self._state.grass_active[i] = False
-                    reward += 10
-                    self._state.grass_timer[i] = self._state.grass_respawn
-            else:
-                if not self._state.grass_active[i] and self._state.grass_timer[i] > 0:
-                    self._state.grass_timer[i] -= 1
-                    if self._state.grass_timer[i] == 0:
-                        self._state.grass_active[i] = True
+        grass_patch = self._dynamics.move_agent(self._state, action)
 
         self._dynamics.move_frogs(self._state)
 
-        # Update lake states based on frog adjacency
-        for i, (lx, ly) in enumerate(self._state.lakes):
-            # Decrease timer if running
-            if self._state.lake_timer[i] > 0:
-                self._state.lake_timer[i] -= 1
-                if self._state.lake_timer[i] == 0:
-                    self._state.lakes_full[i] = True  # refill lake
-
-            # Check adjacency to any frog (Manhattan distance 1)
-            #for fx, fy in self._state.frogs:
-            #    if abs(fx - lx) + abs(fy - ly) == 1 and self._state.lakes_full[i]:
-            #        self._state.lakes_full[i] = False
-            #        self._state.lake_timer[i] = 20
-            #        break
-
-            # Check adjacency to the agent (Manhattan distance 1)
-            ax, ay = self._state.agent
-            if self._state.lakes_full[i] and abs(ax - lx) + abs(ay - ly) == 1:
-                # Additional reward for being adjacent (Manhattan distance 1) to any full lake
-                reward += 5
-                self._state.lakes_full[i] = False
-                self._state.lake_timer[i] = self._state.lake_respawn
+        reward = self.update_env(self._state, reward)
 
         # We don't use truncation in this simple environment
         # (could add a step limit here if desired)
@@ -329,6 +311,46 @@ class GardenerEnv(gym.Env):
         terminated = True if self._state.score >= 300 else False
 
         return observation, reward, terminated, truncated, info
+
+    def update_env(self, state, reward: int) -> int:
+        # Update grass states
+        for i, (gx, gy) in enumerate(state.grass):
+            ax, ay = state.agent
+            if ax == gx and ay == gy:
+                if state.grass_active[i]:
+                    state.grass_active[i] = False
+                    reward += 10
+                    state.grass_timer[i] = state.grass_respawn
+            else:
+                if not state.grass_active[i] and state.grass_timer[
+                    i] > 0:
+                    state.grass_timer[i] -= 1
+                    if state.grass_timer[i] == 0:
+                        state.grass_active[i] = True
+
+        # Update lake states based on frog adjacency
+        for i, (lx, ly) in enumerate(state.lakes):
+            # Decrease timer if running
+            if state.lake_timer[i] > 0:
+                state.lake_timer[i] -= 1
+                if state.lake_timer[i] == 0:
+                    state.lakes_full[i] = True  # refill lake
+
+            # Check adjacency to any frog (Manhattan distance 1)
+            # for fx, fy in state.frogs:
+            #    if abs(fx - lx) + abs(fy - ly) == 1 and state.lakes_full[i]:
+            #        state.lakes_full[i] = False
+            #        state.lake_timer[i] = 20
+            #        break
+
+            # Check adjacency to the agent (Manhattan distance 1)
+            ax, ay = state.agent
+            if state.lakes_full[i] and abs(ax - lx) + abs(ay - ly) == 1:
+                # Additional reward for being adjacent (Manhattan distance 1) to any full lake
+                reward += 5
+                state.lakes_full[i] = False
+                state.lake_timer[i] = state.lake_respawn
+        return reward
 
     def render(self):
         self._renderer.draw(self._state)

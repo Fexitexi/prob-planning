@@ -6,47 +6,20 @@ class GardenerDynamics:
     # Map action numbers to actual movements on the grid
     # This makes the code more readable than using raw numbers
 
-    _action_to_direction = {0: np.array([1, 0]),
-                                     # Move right (positive x)
-                                     1: np.array([0, 1]),
-                                     # Move up (positive y)
-                                     2: np.array([-1, 0]),
-                                     # Move left (negative x)
-                                     3: np.array([0, -1]),
-                                     # Move down (negative y)
-                                     4: np.array([0, 0]),  # Do nothing
-                                     }
-
     def __init__(self, seed=None):
         if seed is None:
             seed = np.random.SeedSequence().entropy
         self.np_random = np.random.Generator(np.random.PCG64(seed))
 
-    def get_action_mask(self, state, pos):
-        mask = np.ones(len(self._action_to_direction), dtype=np.int8)
-        x, y = pos
-        # Prevent moves that leave the grid
-        if x == state.size - 1: mask[0] = 0
-        if y == state.size - 1: mask[1] = 0
-        if x == 0: mask[2] = 0
-        if y == 0: mask[3] = 0
-        # Prevent moves that would step onto a lake
-        for action, direction in self._action_to_direction.items():
-            nx, ny = pos + direction
-            if any((nx == lx and ny == ly) for lx, ly in state.lakes):
-                mask[action] = 0
-            if any((nx == wx and ny == wy) for wx,wy in state.walls):
-                mask[action] = 0
-        return mask
 
     def move_agent(self, state, action):
-        mask = self.get_action_mask(state, state.agent)
+        mask = get_action_mask(state)
 
         if mask[action] == 0:
             raise ValueError(f"Illegal action {action}: action_mask={mask}")
 
         # Map the discrete action (0-4) to a movement direction
-        direction = self._action_to_direction[action]
+        direction = _action_to_direction[action]
 
         # Update agent position, ensuring it stays within grid bounds
         # np.clip prevents the agent from walking off the edge
@@ -70,7 +43,7 @@ class GardenerDynamics:
             return
 
         # Directions for actions 0-3 as a (4, 2) array
-        directions = np.stack([self._action_to_direction[a] for a in range(4)], axis=0)
+        directions = np.stack([_action_to_direction[a] for a in range(4)], axis=0)
 
         # ------------------------------------------------------------------
         # Compute which actions are allowed for all frogs at once
@@ -195,3 +168,33 @@ class GardenerDynamics:
             new_positions[rows] = updated
 
         state.frogs = new_positions.astype(int)
+
+
+_action_to_direction = {0: np.array([1, 0]),
+                                     # Move right (positive x)
+                                     1: np.array([0, 1]),
+                                     # Move up (positive y)
+                                     2: np.array([-1, 0]),
+                                     # Move left (negative x)
+                                     3: np.array([0, -1]),
+                                     # Move down (negative y)
+                                     4: np.array([0, 0]),  # Do nothing
+                                     }
+
+def get_action_mask(state):
+    pos = state.agent
+    mask = np.ones(len(_action_to_direction), dtype=np.int8)
+    x, y = pos
+    # Prevent moves that leave the grid
+    if x == state.size - 1: mask[0] = 0
+    if y == state.size - 1: mask[1] = 0
+    if x == 0: mask[2] = 0
+    if y == 0: mask[3] = 0
+    # Prevent moves that would step onto a lake
+    for action, direction in _action_to_direction.items():
+        nx, ny = pos + direction
+        if any((nx == lx and ny == ly) for lx, ly in state.lakes):
+            mask[action] = 0
+        if any((nx == wx and ny == wy) for wx,wy in state.walls):
+            mask[action] = 0
+    return mask

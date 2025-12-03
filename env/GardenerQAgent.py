@@ -3,6 +3,9 @@ from env.FeatureExtractor import FeatureExtractor
 import numpy as np
 import random
 
+from env.dynamics import get_action_mask
+
+
 class GardenerQAgent:
 
     def __init__(self, seed=None, epsilon=0.05, gamma=0.8, alpha=0.2, numTraining=0,):
@@ -32,7 +35,7 @@ class GardenerQAgent:
         """
         try:
             return max([self.getQValue(state, action)
-                        for action in np.where(state.action_mask == 1)[0]])
+                        for action in np.where(get_action_mask(state) == 1)[0]])
         except  ValueError:
             return 0.0
 
@@ -58,7 +61,7 @@ class GardenerQAgent:
           HINT: You might want to use util.flipCoin(prob)
           HINT: To pick randomly from a list, use random.choice(list)
         """
-        legalActions = np.where(state.action_mask == 1)[0]
+        legalActions = np.where(get_action_mask(state) == 1)[0]
         if util.flipCoin(self.epsilon):
             #print("Random Action")
             return random.choice(legalActions)
@@ -72,7 +75,7 @@ class GardenerQAgent:
           you should return None.
         """
         actionValuePairs = [(action, self.getQValue(state, action))
-                            for action in np.where(state.action_mask == 1)[0]]
+                            for action in np.where(get_action_mask(state) == 1)[0]]
         if actionValuePairs == []:
             return None
         maxValue = max(actionValuePairs, key=lambda x: x[1])[1]
@@ -85,7 +88,7 @@ class GardenerQAgent:
 
     def getBestActions(self, state):
         actionValuePairs = [(action, self.getQValue(state, action))
-                            for action in np.where(state.action_mask == 1)[0]]
+                            for action in np.where(get_action_mask(state) == 1)[0]]
         if actionValuePairs == []:
             return None
         maxValue = max(actionValuePairs, key=lambda x: x[1])[1]

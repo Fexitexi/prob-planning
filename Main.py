@@ -1,3 +1,5 @@
+import math
+
 import gymnasium as gym
 import time
 import random
@@ -14,10 +16,17 @@ gym.envs.registration.register(
 if __name__ == "__main__":
     env = gym.make("GardenerEnv-v0")
     gar = env.unwrapped
+
+    # hoeffding
+    confidence = 0.80
+    delta = 1 - confidence
+    epsilon = 0.05
+    sample_size = math.ceil((1/(2 * math.pow(epsilon, 2))) * math.log(1/delta))
+
     numTraining = 0
     numTesting = 10
     horizon = 3
-    sample_size = 100
+    #sample_size = 100
     q_agent = GardenerQAgent()
     asp_transformer = ASPTransformer(q_agent)
     if numTraining == 0:
@@ -49,7 +58,7 @@ if __name__ == "__main__":
 
         while not done:
             #sampling
-            samples = gar.sample(horizon, sample_size)
+            samples = gar.sample(horizon, sample_size, q_agent)
             worlds = asp_transformer.build_worlds(samples)
 
             #clingo
