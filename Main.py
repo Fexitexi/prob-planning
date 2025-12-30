@@ -20,7 +20,7 @@ if __name__ == "__main__":
     # hoeffding
     confidence = 0.80
     delta = 1 - confidence
-    epsilon = 0.05
+    epsilon = 0.03
     sample_size = math.ceil((1/(2 * math.pow(epsilon, 2))) * math.log(1/delta))
 
     numTraining = 0
