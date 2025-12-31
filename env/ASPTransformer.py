@@ -1,7 +1,9 @@
 import clingo
 import time
+import random
+import numpy as np
 
-from env.dynamics import GardenerDynamics
+from env.dynamics import GardenerDynamics, get_action_mask_pos
 
 
 class ASPTransformer:
@@ -17,9 +19,70 @@ class ASPTransformer:
         self._dynamics = GardenerDynamics()
         self._q_agent = q_agent
         self._latest_model = None
+        self._rnd = None
+        self._lake_dict = None
+        self._dyn_lake_dict = None
 
     def build_static(self, state, horizon) -> str:
         lines = []
+
+        self._lake_dict = {}
+        # build the lake dict
+
+        lake_dist = []
+        lake_best_step = []
+        walls_set = {tuple(w) for w in state.walls}
+        lakes_set = {tuple(w) for w in state.lakes}
+
+        from collections import deque
+
+        for (lx, ly) in state.lakes:
+            dist = np.full((state.size, state.size), np.iinfo(np.int32).max,
+                           dtype=np.int32)
+            best = np.zeros((state.size, state.size, 2), dtype=np.int8)
+
+            q = deque()
+            q.append((lx, ly))
+            dist[lx, ly] = 0
+
+            while q:
+                x, y = q.popleft()
+                for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < state.size and 0 <= ny < state.size:
+                        if (nx, ny) in walls_set or (nx, ny) in lakes_set:
+                            continue
+                        if dist[nx, ny] > dist[x, y] + 1:
+                            dist[nx, ny] = dist[x, y] + 1
+                            best[nx, ny] = np.array([-dx, -dy], dtype=np.int8)
+                            q.append((nx, ny))
+
+            lake_dist.append(dist)
+            lake_best_step.append(best)
+
+        for c in range(state.size):
+            for r in range(state.size):
+                if (c, r) in walls_set or (c, r) in lakes_set:
+                    continue
+                lakes_info = []
+                for i in range(len(state.lakes)):
+                    dist = lake_dist[i][c, r]
+                    step = lake_best_step[i][c, r]
+
+                    action = 4
+                    if step[0] == 1 and step[1] == 0:
+                        action = 0
+                    elif step[0] == 0 and step[1] == 1:
+                        action = 1
+                    elif step[0] == -1 and step[1] == 0:
+                        action = 2
+                    elif step[0] == 0 and step[1] == -1:
+                        action = 3
+
+                    lakes_info.append((i, dist, action))
+
+                lakes_info.sort(key=lambda x: x[1])
+                self._lake_dict[(c, r)] = lakes_info
 
         # constants
         lines.append(f"#const size={state.size}.")
@@ -32,6 +95,22 @@ class ASPTransformer:
         line = ""
         for (c, r) in state.walls:
             line += f"wall({c}, {r})."
+        lines.append(line)
+
+        # encode possible actions
+        line = ""
+        for c in range(state.size):
+            for r in range(state.size):
+                is_wall = np.any(np.all(state.walls == [c, r], axis=1))
+                is_lake = np.any(np.all(state.lakes == [c, r], axis=1))
+                if not is_wall and not is_lake:
+                    pos_actions = []
+                    action_mask = get_action_mask_pos((c, r), state)
+                    for i in range(len(action_mask) - 1):
+                        if action_mask[i] == 1:
+                            pos_actions.append(i)
+                    for i, action in enumerate(pos_actions):
+                        line += f"act_pos({c}, {r}, {action}, {i}, {len(pos_actions)})."
         lines.append(line)
 
         # constant atoms: lakes
@@ -70,6 +149,105 @@ class ASPTransformer:
 
         return "\n".join(lines)
 
+    def build_dynamic_worlds(self, state, num_worlds, horizon) -> str:
+        self._state = state
+        lines = []
+
+        # agent position
+        lines.append(f"agent({state.agent[0]}, {state.agent[1]}, 0).")
+
+        self._dyn_lake_dict = {}
+
+        words = ["1"]
+        final_words = []
+        for h in range(horizon):
+            new_words = []
+            for w in words:
+                for a in range(5):
+                    word = f"{w}{a}"
+                    new_words.append(word)
+            words = new_words
+            final_words.extend(new_words)
+
+        for w in final_words:
+            w = w.removeprefix("1")
+            copy_state = state.fast_clone()
+            valid = True
+            for a in w:
+                try:
+                    self._dynamics.move_agent(copy_state, int(a))
+                except:
+                    valid = False
+                    break
+                # todo this should be in dynamics
+                for i, (gx, gy) in enumerate(copy_state.grass):
+                    ax, ay = copy_state.agent
+                    if ax == gx and ay == gy:
+                        if copy_state.grass_active[i]:
+                            copy_state.grass_active[i] = False
+                            copy_state.grass_timer[i] = copy_state.grass_respawn
+                    else:
+                        if not copy_state.grass_active[i] and copy_state.grass_timer[
+                            i] > 0:
+                            copy_state.grass_timer[i] -= 1
+                            if copy_state.grass_timer[i] == 0:
+                                copy_state.grass_active[i] = True
+
+                # Update lake states based on frog adjacency
+                for i, (lx, ly) in enumerate(copy_state.lakes):
+                    # Decrease timer if running
+                    if copy_state.lake_timer[i] > 0:
+                        copy_state.lake_timer[i] -= 1
+                        if copy_state.lake_timer[i] == 0:
+                            copy_state.lakes_full[i] = True  # refill lake
+
+
+                    # Check adjacency to the agent (Manhattan distance 1)
+                    ax, ay = copy_state.agent
+                    if copy_state.lakes_full[i] and abs(ax - lx) + abs(
+                            ay - ly) == 1:
+                        # Additional reward for being adjacent (Manhattan distance 1) to any full lake
+                        copy_state.lakes_full[i] = False
+                        copy_state.lake_timer[i] = copy_state.lake_respawn
+            if valid:
+                self._dyn_lake_dict[f"1{w}"] = copy_state.lakes_full
+
+        for h in self._dyn_lake_dict:
+            full_lakes = self._dyn_lake_dict[h]
+            for (c, r) in self._lake_dict:
+                lakes = self._lake_dict[(c,r)]
+                lake = None
+                for i in lakes:
+                    if full_lakes[i[0]]:
+                        lake = i
+                        break
+                if lake is not None:
+                    lines.append(f"pref_act({c},{r},{h},{lake[2]}).")
+                else:
+                    print("ALL LAKES EMPTY")
+                    #todo current program does not react to that
+                    print(f"pref_act({c},{r},{h},{4}).")
+
+        # possible to compute pref_act(X,Y,H,AP)?
+
+
+        self._rnd = []
+        # frogs
+        for i in range(num_worlds):
+            random_world = []
+            for f, (c,r) in enumerate(state.frogs):
+                random_frog = []
+                lines.append(f"frog({c}, {r}, {f}, 0, {i}).")
+                for t in range(horizon):
+                    ran = random.random()
+                    lines.append(f"f_rnd({f}, {t}, {i}, {int(ran * 100)}).")
+                    random_frog.append(ran)
+                random_world.append(random_frog)
+            self._rnd.append(random_world)
+
+
+        return "\n".join(lines)
+
     def build_worlds(self, worlds) -> str:
         lines = []
 
@@ -82,6 +260,46 @@ class ASPTransformer:
 
         return "\n".join(lines)
 
+
+    def call_clingo_new(self, static, dynamic, horizon):
+        start_time = time.time()
+        self._latest_model = None
+        with open("new2.lp", "r") as f:
+            fixed_program = f.read()
+        ctl = clingo.Control()
+        ctl.add("base", [], f"{static}\n{dynamic}\n{fixed_program}")
+        ctl.ground([("base", [])], context=self)
+        ctl.solve(on_model=self.on_model)
+        actions = [-1] * horizon
+        for sym in self._latest_model:
+            if sym.name == "action" and len(sym.arguments) == 2:
+                actions[sym.arguments[1].number] = sym.arguments[0].number
+
+        elapsed = time.time() - start_time
+        print(f"clingo took {elapsed:.6f} seconds")
+        return actions
+
+    def compute_action(self, X,Y,I,T,W,H):
+        # todo
+        #   consider drained lakes
+        #   change actual probabilities
+
+        # get the random number for the frog at the time point in its world
+        rnd = self._rnd[W.number][I.number][T.number]
+
+        # get the frogs possible actions
+        # todo fix action mask
+        #action_mask = get_action_mask_pos((X.number, Y.number), self._state)
+        action_mask = [0,1,1,1,1]
+
+        actions = []
+        for i in range(len(action_mask) - 1):
+            if action_mask[i] == 1:
+                actions.append(i)
+
+        action = rnd * len(actions)
+
+        return clingo.Number(actions[int(action)])
 
     def call_clingo(self, static, dynamic, worlds, horizon):
         start_time = time.time()

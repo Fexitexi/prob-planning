@@ -239,6 +239,19 @@ class GardenerEnv(gym.Env):
         return observation, info
 
 
+    def simulate_samples(self, horizon, q_agent):
+        # simulate the environment for a certain horizon
+        # return FALSE if the simulation violates the a norm
+        state = self._state.fast_clone()
+        for h in range(horizon):
+            action = q_agent.getAction(state)
+            self._dynamics.move_agent(state, action)
+            self._dynamics.move_frogs(state)
+            if np.any(np.all(state.agent == state.frogs, axis=1)):
+                return False
+        return True
+
+
     def sample(self, horizon, size):
         # create a copy of current random variable that does not influence og
         np_random = np.random.Generator(self.np_random.bit_generator.jumped())

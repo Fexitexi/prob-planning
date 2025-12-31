@@ -181,8 +181,7 @@ _action_to_direction = {0: np.array([1, 0]),
                                      4: np.array([0, 0]),  # Do nothing
                                      }
 
-def get_action_mask(state):
-    pos = state.agent
+def get_action_mask_pos(pos, state):
     mask = np.ones(len(_action_to_direction), dtype=np.int8)
     x, y = pos
     # Prevent moves that leave the grid
@@ -195,6 +194,10 @@ def get_action_mask(state):
         nx, ny = pos + direction
         if any((nx == lx and ny == ly) for lx, ly in state.lakes):
             mask[action] = 0
-        if any((nx == wx and ny == wy) for wx,wy in state.walls):
+        if any((nx == wx and ny == wy) for wx, wy in state.walls):
             mask[action] = 0
     return mask
+
+def get_action_mask(state):
+    pos = state.agent
+    return get_action_mask_pos(pos, state)
