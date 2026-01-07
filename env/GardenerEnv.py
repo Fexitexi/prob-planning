@@ -323,6 +323,11 @@ class GardenerEnv(gym.Env):
 
         self._dynamics.move_frogs(self._state)
 
+        if np.any(np.all(self._state.agent == self._state.frogs, axis=1)):
+            msg = "FROG KILLED!"
+            print(f"\033[31m{msg}\033[0m")
+
+
         reward = self.update_env(self._state, reward)
 
         # We don't use truncation in this simple environment

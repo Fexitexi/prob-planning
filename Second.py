@@ -37,6 +37,7 @@ if __name__ == "__main__":
     static = asp_transformer.build_static(state, horizon)
 
     while not done:
+        start_time = time.time()
         # check rule of three
         rot = True
         for i in range(n_rot):
@@ -54,7 +55,9 @@ if __name__ == "__main__":
 
         obs, reward, terminated, truncated, info = env.step(action)
         state = ObservationState.from_obs(obs)
-        time.sleep(0.5)
+        elapsed = time.time() - start_time
+        sleep = max(0, 0.5 - elapsed)
+        time.sleep(sleep)
         env.render()
         done = terminated or truncated
 
