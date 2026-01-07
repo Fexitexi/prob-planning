@@ -18,11 +18,6 @@ class GardenerRenderer:
             pygame.draw.line(self.screen, (200, 200, 200),
                              (0, i * self.cell_size),
                              (self.window_size, i * self.cell_size))
-        # Draw agent
-        ax, ay = state.agent
-        pygame.draw.rect(self.screen, (255, 0, 255),
-                         pygame.Rect(ax * self.cell_size, ay * self.cell_size,
-                                     self.cell_size, self.cell_size))
 
         # Draw grass patches
         for idx, (gx, gy) in enumerate(state.grass):
@@ -30,13 +25,6 @@ class GardenerRenderer:
             pygame.draw.rect(self.screen, color,
                              pygame.Rect(gx * self.cell_size,
                                          gy * self.cell_size, self.cell_size,
-                                         self.cell_size))
-
-        # Draw frogs
-        for fx, fy in state.frogs:
-            pygame.draw.rect(self.screen, (0, 255, 0),
-                             pygame.Rect(fx * self.cell_size,
-                                         fy * self.cell_size, self.cell_size,
                                          self.cell_size))
         # Draw lakes
         for idx, (lx, ly) in enumerate(state.lakes):
@@ -46,12 +34,26 @@ class GardenerRenderer:
                                          ly * self.cell_size, self.cell_size,
                                          self.cell_size))
 
+        # Draw frogs
+        for fx, fy in state.frogs:
+            pygame.draw.rect(self.screen, (0, 255, 0),
+                             pygame.Rect(fx * self.cell_size,
+                                         fy * self.cell_size, self.cell_size,
+                                         self.cell_size))
+
         # Draw walls
         for wx, wy in state.walls:
             pygame.draw.rect(self.screen, (120, 120, 120),
                              pygame.Rect(wx * self.cell_size,
                                          wy * self.cell_size, self.cell_size,
                                          self.cell_size))
+        # Draw agent
+        ax, ay = state.agent
+        agent_size = int(self.cell_size * 0.6)
+        offset = (self.cell_size - agent_size) // 2
+        pygame.draw.rect(self.screen, (255, 0, 255),
+                         pygame.Rect(ax * self.cell_size + offset, ay * self.cell_size + offset,
+                                     agent_size, agent_size))
 
         # Draw score
         if not hasattr(self, "font"):

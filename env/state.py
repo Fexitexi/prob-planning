@@ -4,11 +4,13 @@ import numpy as np
 
 class GardenerState:
     agent: np.ndarray
+    pos_actions: dict
     frogs: np.ndarray
     lakes: np.ndarray
     lakes_full: np.ndarray
     lake_dist: np.ndarray
     lake_best_step: np.ndarray
+    lake_dict: dict
     lake_timer: np.ndarray
     grass: np.ndarray
     grass_active: np.ndarray
@@ -26,6 +28,7 @@ class GardenerState:
         new.lake_respawn = self.lake_respawn
         new.score = self.score
         new.agent = self.agent.copy()
+        new.pos_actions = self.pos_actions.copy()
         new.grass = self.grass.copy()
         new.grass_active = self.grass_active.copy()
         new.grass_timer = self.grass_timer.copy()
@@ -35,6 +38,7 @@ class GardenerState:
         new.lake_dist = self.lake_dist.copy()
         new.lake_best_step = self.lake_best_step.copy()
         new.lakes_full = self.lakes_full.copy()
+        new.lake_dict = self.lake_dict.copy()
         new.lake_timer = self.lake_timer.copy()
         return new
 

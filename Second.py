@@ -43,6 +43,7 @@ if __name__ == "__main__":
         for i in range(n_rot):
             rot = gar.simulate_samples(horizon, q_agent)
             if not rot: break
+        print(f"Sampling (rot) took {time.time() - start_time:.6f} seconds.")
 
         if rot:
             # rule of three is fulfilled, execute RL policy

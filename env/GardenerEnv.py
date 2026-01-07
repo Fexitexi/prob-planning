@@ -4,7 +4,7 @@ from typing import Optional
 import gymnasium as gym
 import numpy as np
 
-from env.dynamics import GardenerDynamics
+from env.dynamics import GardenerDynamics, get_action_mask_pos
 from env.rendering import GardenerRenderer
 from env.state import GardenerState
 
@@ -183,6 +183,9 @@ class GardenerEnv(gym.Env):
         if len(wall_positions) < len(self._state.walls):
             return self.reset(seed=seed)
         self._state.walls = np.array(wall_positions, dtype=int)
+        self._state.lakes = np.array(lake_positions, dtype=int)
+        self._state.frogs = np.array(frog_positions, dtype=int)
+        self._state.grass = np.array(grass_positions, dtype=int)
 
         #print("free candidates:", len(remaining_positions))
         #print("accepted:", len(wall_positions))
@@ -192,8 +195,22 @@ class GardenerEnv(gym.Env):
         # -------------------------------------------------------------
         size = self._state.size
         walls_set = {tuple(w) for w in self._state.walls}
+        lakes_set = {tuple(w) for w in self._state.lakes}
         lake_dist = []
         lake_best_step = []
+
+        self._state.pos_actions = {}
+        for c in range(size):
+            for r in range(size):
+                is_wall = np.any(np.all(self._state.walls == [c, r], axis=1))
+                is_lake = np.any(np.all(self._state.lakes == [c, r], axis=1))
+                if not is_wall and not is_lake:
+                    pos_actions = []
+                    action_mask = get_action_mask_pos((c, r), self._state)
+                    for i in range(len(action_mask) - 1):
+                        if action_mask[i] == 1:
+                            pos_actions.append(i)
+                    self._state.pos_actions[(c, r)] = pos_actions
 
         from collections import deque
 
@@ -212,6 +229,10 @@ class GardenerEnv(gym.Env):
                     if 0 <= nx < size and 0 <= ny < size:
                         if (nx, ny) in walls_set:
                             continue
+                        # Also avoid other lakes
+                        if (nx, ny) in lakes_set and (nx, ny) != (lx, ly):
+                            continue
+
                         if dist[nx, ny] > dist[x, y] + 1:
                             dist[nx, ny] = dist[x, y] + 1
                             best[nx, ny] = np.array([-dx, -dy], dtype=np.int8)
@@ -220,16 +241,39 @@ class GardenerEnv(gym.Env):
             lake_dist.append(dist)
             lake_best_step.append(best)
 
+
+        self._state.lake_dict = {}
+        for c in range(size):
+            for r in range(size):
+                if (c, r) in walls_set or (c, r) in lakes_set:
+                    continue
+                lakes_info = []
+                for i in range(len(self._state.lakes)):
+                    dist = lake_dist[i][c, r]
+                    step = lake_best_step[i][c, r]
+
+                    action = 4
+                    if step[0] == 1 and step[1] == 0:
+                        action = 0
+                    elif step[0] == 0 and step[1] == 1:
+                        action = 1
+                    elif step[0] == -1 and step[1] == 0:
+                        action = 2
+                    elif step[0] == 0 and step[1] == -1:
+                        action = 3
+
+                    lakes_info.append((i, dist, action))
+
+                lakes_info.sort(key=lambda x: x[1])
+                self._state.lake_dict[(c, r)] = lakes_info
+
         self._state.lake_dist = lake_dist
         self._state.lake_best_step = lake_best_step
 
 
         # np_random.choice returns a 1D array if input is 1D, so convert to
         # 2D array of positions
-        self._state.frogs = np.array(frog_positions, dtype=int)
-        self._state.lakes = np.array(lake_positions, dtype=int)
         self._state.lake_timer = np.ones(len(self._state.lakes), dtype=int)
-        self._state.grass = np.array(grass_positions, dtype=int)
         self._state.grass_active[:] = True
         self._state.grass_timer[:] = 0
 
