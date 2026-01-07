@@ -24,11 +24,11 @@ action_reward(@compute_reward(H), T) :- history(H, T).
 :- agent(X,Y,T), lake(X,Y,I).
 
 % compute frog action w/ sampled lookup table
-f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref_act(X,Y,H,AP), history(H,T), act_pos(X,Y,A,O,N'), N = N' - 1, A < AP, R >= O * (30 / N), R < (O + 1) * (30 / N).
+f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref_act(X,Y,H,AP), history(H,T), act_pos(X,Y,A,O,N'), N = N' - 1, N > 0, A < AP, R >= O * (30 / N), R < (O + 1) * (30 / N).
 f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref_act(X,Y,H,AP), history(H,T), act_pos(X,Y,A,O,N'), N = N' - 1, N > 0, A = AP, R >= O * (30 / N), R < O * (30 / N) + 70.
 f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref_act(X,Y,H,AP), history(H,T), act_pos(X,Y,A,O,N'), N = N' - 1, N = 0, A = AP.
-f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref_act(X,Y,H,AP), history(H,T), act_pos(X,Y,A,O,N'), N = N' - 1, A > AP, R >= 70 + O * (30 / N), R < 70 + (O + 1) * (30 / N).
-
+f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref_act(X,Y,H,AP), history(H,T), act_pos(X,Y,A,O,N'), N = N' - 1, N > 0, A > AP, R >= 70 + (O - 1) * (30 / N), R < 70 + O * (30 / N).
+f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref_act(X,Y,H,-1), history(H,T), act_pos(X,Y,A,O,N), R >= O * (100 / N), R < (O + 1) * (100 / N).
 
 % lake full + lake pref? maybe for next iteration
 

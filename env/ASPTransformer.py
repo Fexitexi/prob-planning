@@ -225,8 +225,7 @@ class ASPTransformer:
                     lines.append(f"pref_act({c},{r},{h},{lake[2]}).")
                 else:
                     print("ALL LAKES EMPTY")
-                    #todo current program does not react to that
-                    print(f"pref_act({c},{r},{h},{4}).")
+                    print(f"pref_act({c},{r},{h},{-1}).")
 
         # possible to compute pref_act(X,Y,H,AP)?
 
