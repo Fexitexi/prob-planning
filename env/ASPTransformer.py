@@ -262,7 +262,7 @@ class ASPTransformer:
     def call_clingo_new(self, static, dynamic, horizon):
         start_time = time.time()
         self._latest_model = None
-        with open("new2.lp", "r") as f:
+        with open("fixed-logic.lp", "r") as f:
             fixed_program = f.read()
         ctl = clingo.Control()
         ctl.add("base", [], f"{static}\n{dynamic}\n{fixed_program}")
@@ -276,28 +276,6 @@ class ASPTransformer:
         elapsed = time.time() - start_time
         print(f"clingo took {elapsed:.6f} seconds")
         return actions
-
-    def compute_action(self, X,Y,I,T,W,H):
-        # todo
-        #   consider drained lakes
-        #   change actual probabilities
-
-        # get the random number for the frog at the time point in its world
-        rnd = self._rnd[W.number][I.number][T.number]
-
-        # get the frogs possible actions
-        # todo fix action mask
-        #action_mask = get_action_mask_pos((X.number, Y.number), self._state)
-        action_mask = [0,1,1,1,1]
-
-        actions = []
-        for i in range(len(action_mask) - 1):
-            if action_mask[i] == 1:
-                actions.append(i)
-
-        action = rnd * len(actions)
-
-        return clingo.Number(actions[int(action)])
 
     def call_clingo(self, static, dynamic, worlds, horizon):
         start_time = time.time()
