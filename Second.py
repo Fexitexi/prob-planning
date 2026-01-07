@@ -43,16 +43,19 @@ if __name__ == "__main__":
         for i in range(n_rot):
             rot = gar.simulate_samples(horizon, q_agent)
             if not rot: break
-        print(f"Sampling (rot) took {time.time() - start_time:.6f} seconds.")
+        #print(f"Sampling (rot) took {time.time() - start_time:.6f} seconds.")
 
         if rot:
             # rule of three is fulfilled, execute RL policy
             action = q_agent.getAction(state)
         else:
             # rule of three is not fulfilled, create emergency fix
+            start_time_asp = time.time()
             dynamic = asp_transformer.build_dynamic_worlds(state, n_asp, horizon)
             actions = asp_transformer.call_clingo_new(static, dynamic, horizon)
             action = actions[0]
+            elapsed_asp = time.time() - start_time_asp
+            print(f"clingo took {elapsed_asp:.6f} seconds")
 
         obs, reward, terminated, truncated, info = env.step(action)
         state = ObservationState.from_obs(obs)

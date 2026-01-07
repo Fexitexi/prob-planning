@@ -260,7 +260,6 @@ class ASPTransformer:
 
 
     def call_clingo_new(self, static, dynamic, horizon):
-        start_time = time.time()
         self._latest_model = None
         with open("fixed-logic.lp", "r") as f:
             fixed_program = f.read()
@@ -272,9 +271,6 @@ class ASPTransformer:
         for sym in self._latest_model:
             if sym.name == "action" and len(sym.arguments) == 2:
                 actions[sym.arguments[1].number] = sym.arguments[0].number
-
-        elapsed = time.time() - start_time
-        print(f"clingo took {elapsed:.6f} seconds")
         return actions
 
     def call_clingo(self, static, dynamic, worlds, horizon):
