@@ -225,8 +225,6 @@ class ASPTransformer:
                     lines.append(f"pref_act({c},{r},{h},{lake[2]}).")
                 else:
                     lines.append(f"pref_act({c},{r},{h},{-1}).")
-                    print("ALL LAKES EMPTY")
-                    print(f"pref_act({c},{r},{h},{-1}).")
 
 
         self._rnd = []

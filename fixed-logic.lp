@@ -30,8 +30,6 @@ f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref_act(X,Y,H,AP), histor
 f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref_act(X,Y,H,AP), history(H,T), act_pos(X,Y,A,O,N'), N = N' - 1, N > 0, A > AP, R >= 70 + (O - 1) * (30 / N), R < 70 + O * (30 / N).
 f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref_act(X,Y,H,-1), history(H,T), act_pos(X,Y,A,O,N), R >= O * (100 / N), R < (O + 1) * (100 / N).
 
-% lake full + lake pref? maybe for next iteration
-
 
 % compute frog movement
 frog(X+1,Y,I,T+1,W) :- frog(X,Y,I,T,W), f_action(0,I,T,W).    % move right
@@ -43,7 +41,8 @@ frog(X,Y-1,I,T+1,W) :- frog(X,Y,I,T,W), f_action(3,I,T,W).    % move down
 %%% OPTIMIZATION %%%
 
 % try not to step onto frogs
-:~ agent(X,Y,T), frog(X,Y,I,T,W). [1@ horizon +1]
+norm_violation(W) :- agent(X,Y,T), frog(X,Y,I,T,W).
+:~ norm_violation(W). [1@ horizon +1]
 
 #maximize {R@ horizon-T : action_reward(R,T)}.
 #show history/2.
