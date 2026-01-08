@@ -4,7 +4,8 @@ from typing import Optional
 import gymnasium as gym
 import numpy as np
 
-from env.dynamics import GardenerDynamics, get_action_mask_pos
+from env.dynamics import GardenerDynamics, get_action_mask_pos, \
+    _action_to_direction
 from env.rendering import GardenerRenderer
 from env.state import GardenerState
 
@@ -61,6 +62,7 @@ class GardenerEnv(gym.Env):
              "grass_timer": gym.spaces.Box(0, grass_respawn, shape=(num_grass,), dtype=int),
              "walls": gym.spaces.Box(0, size - 1, shape=(num_walls, 2),
                                      dtype=int),
+             "pos_actions": gym.spaces.Box(0, 1, shape=(size, size, 5), dtype=int),
              })
 
 
@@ -84,7 +86,8 @@ class GardenerEnv(gym.Env):
                 "grass": self._state.grass,
                 "grass_active": self._state.grass_active,
                 "grass_timer": self._state.grass_timer,
-                "walls": self._state.walls}
+                "walls": self._state.walls,
+                "pos_actions": self._state.pos_actions}
 
     def _get_info(self):
         """Compute auxiliary information for debugging.
@@ -199,18 +202,31 @@ class GardenerEnv(gym.Env):
         lake_dist = []
         lake_best_step = []
 
-        self._state.pos_actions = {}
+        self._state.pos_actions = np.zeros((size, size, 5), dtype=int)
         for c in range(size):
             for r in range(size):
                 is_wall = np.any(np.all(self._state.walls == [c, r], axis=1))
                 is_lake = np.any(np.all(self._state.lakes == [c, r], axis=1))
                 if not is_wall and not is_lake:
-                    pos_actions = []
-                    action_mask = get_action_mask_pos((c, r), self._state)
-                    for i in range(len(action_mask) - 1):
-                        if action_mask[i] == 1:
-                            pos_actions.append(i)
-                    self._state.pos_actions[(c, r)] = pos_actions
+                    mask = np.ones(len(_action_to_direction), dtype=np.int8)
+                    x, y = (c,r)
+                    # Prevent moves that leave the grid
+                    if x == self._state.size - 1: mask[0] = 0
+                    if y == self._state.size - 1: mask[1] = 0
+                    if x == 0: mask[2] = 0
+                    if y == 0: mask[3] = 0
+                    # Prevent moves that would step onto a lake
+                    for action, direction in _action_to_direction.items():
+                        nx, ny = (c,r) + direction
+                        if any((nx == lx and ny == ly) for lx, ly in
+                               self._state.lakes):
+                            mask[action] = 0
+                        if any((nx == wx and ny == wy) for wx, wy in
+                               self._state.walls):
+                            mask[action] = 0
+                    for i in range(len(mask)):
+                        if mask[i] == 1:
+                            self._state.pos_actions[c, r, i] = 1
 
         from collections import deque
 

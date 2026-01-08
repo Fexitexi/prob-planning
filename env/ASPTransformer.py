@@ -3,7 +3,7 @@ import time
 import random
 import numpy as np
 
-from env.dynamics import GardenerDynamics, get_action_mask_pos
+from env.dynamics import GardenerDynamics
 
 
 class ASPTransformer:
@@ -105,10 +105,11 @@ class ASPTransformer:
                 is_lake = np.any(np.all(state.lakes == [c, r], axis=1))
                 if not is_wall and not is_lake:
                     pos_actions = []
-                    action_mask = get_action_mask_pos((c, r), state)
-                    for i in range(len(action_mask) - 1):
-                        if action_mask[i] == 1:
+                    # Use the precomputed pos_actions array from state
+                    for i in range(4):
+                        if state.pos_actions[c, r, i] == 1:
                             pos_actions.append(i)
+
                     for i, action in enumerate(pos_actions):
                         line += f"act_pos({c}, {r}, {action}, {i}, {len(pos_actions)})."
         lines.append(line)

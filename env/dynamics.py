@@ -47,8 +47,12 @@ class GardenerDynamics:
             fx, fy = frogs[i]
             pos_tuple = (int(fx), int(fy))
             
-            # Get valid moves from pre-computed dictionary
-            valid_moves = state.pos_actions.get(pos_tuple, [])
+            # Get valid moves from pre-computed array
+            valid_moves = []
+            if 0 <= fx < state.size and 0 <= fy < state.size:
+                for a in range(4):
+                    if state.pos_actions[int(fx), int(fy), a] == 1:
+                        valid_moves.append(a)
             
             if not valid_moves:
                 new_positions.append([fx, fy])
@@ -106,21 +110,7 @@ _action_to_direction = {0: np.array([1, 0]),
                                      }
 
 def get_action_mask_pos(pos, state):
-    mask = np.ones(len(_action_to_direction), dtype=np.int8)
-    x, y = pos
-    # Prevent moves that leave the grid
-    if x == state.size - 1: mask[0] = 0
-    if y == state.size - 1: mask[1] = 0
-    if x == 0: mask[2] = 0
-    if y == 0: mask[3] = 0
-    # Prevent moves that would step onto a lake
-    for action, direction in _action_to_direction.items():
-        nx, ny = pos + direction
-        if any((nx == lx and ny == ly) for lx, ly in state.lakes):
-            mask[action] = 0
-        if any((nx == wx and ny == wy) for wx, wy in state.walls):
-            mask[action] = 0
-    return mask
+    return state.pos_actions[pos[0]][pos[1]]
 
 def get_action_mask(state):
     pos = state.agent

@@ -56,6 +56,7 @@ class ObservationState:
     size: int
     grass_respawn: int
     lake_respawn: int
+    pos_actions: np.ndarray
 
     @staticmethod
     def from_obs(obs):
@@ -71,7 +72,8 @@ class ObservationState:
             walls=obs["walls"],
             size=obs["size"],
             grass_respawn=obs["grass_respawn"],
-            lake_respawn=obs["lake_respawn"]
+            lake_respawn=obs["lake_respawn"],
+            pos_actions=obs["pos_actions"]
         )
 
     def fast_clone(self):
@@ -88,4 +90,5 @@ class ObservationState:
             size=self.size,
             grass_respawn=self.grass_respawn,
             lake_respawn=self.lake_respawn,
+            pos_actions=self.pos_actions.copy(),
         )

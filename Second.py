@@ -23,6 +23,11 @@ if __name__ == "__main__":
     n_asp = 1700
 
 
+    num_envs = 60
+    env_fns = [lambda: gym.make("GardenerEnv-v0") for _ in range(num_envs)]
+    envs = gym.vector.SyncVectorEnv(env_fns)
+    obs, infos = envs.reset()
+
     # load the pre-trained weights
     q_agent = GardenerQAgent()
     asp_transformer = ASPTransformer(q_agent)
@@ -43,7 +48,20 @@ if __name__ == "__main__":
         for i in range(n_rot):
             rot = gar.simulate_samples(horizon, q_agent, actions)
             if not rot: break
-        #print(f"Sampling (rot) took {time.time() - start_time:.6f} seconds.")
+        print(f"Sampling (rot) took {time.time() - start_time:.6f} seconds.")
+
+        # sampling testing
+        start_time = time.time()
+        # synchronize environments
+        for e in envs.envs:
+            e.unwrapped._state = env.unwrapped._state.fast_clone()
+            for i in range(horizon):
+                e_action = q_agent.getAction(e.unwrapped._state)
+                e.step(e_action)
+
+        #test_actions = [4] * num_envs
+        #envs.step(test_actions)
+        print(f"Sampling (gym) took {time.time() - start_time:.6f} seconds.")
 
         if rot:
             # rule of three is fulfilled, execute RL policy
