@@ -114,21 +114,28 @@ class ASPTransformer:
             line += f"wall({c}, {r})."
         lines.append(line)
 
-        # encode possible actions
+        # encode possible actions of frogs
         line = ""
-        for c in range(state.size):
-            for r in range(state.size):
-                is_wall = np.any(np.all(state.walls == [c, r], axis=1))
-                is_lake = np.any(np.all(state.lakes == [c, r], axis=1))
-                if not is_wall and not is_lake:
-                    pos_actions = []
-                    # Use the precomputed pos_actions array from state
-                    for i in range(4):
-                        if state.pos_actions[c, r, i] == 1:
-                            pos_actions.append(i)
 
-                    for i, action in enumerate(pos_actions):
-                        line += f"act_pos({c}, {r}, {action}, {i}, {len(pos_actions)})."
+        for (c_f,r_f) in state.frogs:
+            c_min = c_f - horizon
+            c_max = c_f + horizon
+            r_min = r_f - horizon
+            r_max = r_f + horizon
+            for c in range(c_min, c_max + 1):
+                if 0 <= c < state.size:
+                    for r in range(r_min, r_max + 1):
+                        if 0 <= r < state.size:
+                            is_wall = np.any(np.all(state.walls == [c, r], axis=1))
+                            is_lake = np.any(np.all(state.lakes == [c, r], axis=1))
+                            if not is_wall and not is_lake:
+                                pos_actions = []
+                                # Use the precomputed pos_actions array from state
+                                for i in range(4):
+                                    if state.pos_actions[c, r, i] == 1:
+                                        pos_actions.append(i)
+                                for i, action in enumerate(pos_actions):
+                                    line += f"act_pos({c}, {r}, {action}, {i}, {len(pos_actions)})."
         lines.append(line)
 
         # constant atoms: lakes
@@ -245,18 +252,29 @@ class ASPTransformer:
 
         for h in self._dyn_lake_dict:
             full_lakes = self._dyn_lake_dict[h]
-            for (c, r) in self._lake_dict:
-                lakes = self._lake_dict[(c,r)]
-                lake = None
-                for i in lakes:
-                    if full_lakes[i[0]]:
-                        lake = i
-                        break
-                if lake is not None:
-                    lines.append(f"pref_act({c},{r},{h},{lake[2]}).")
-                else:
-                    lines.append(f"pref_act({c},{r},{h},{-1}).")
-
+            done = []
+            for (c_f,r_f) in state.frogs:
+                c_min = c_f - horizon
+                c_max = c_f + horizon
+                r_min = r_f - horizon
+                r_max = r_f + horizon
+                for c in range(c_min, c_max + 1):
+                    for r in range(r_min, r_max + 1):
+                        if (c,r) not in done:
+                            done.append((c,r))
+                            if (c, r) in self._lake_dict:
+                                lakes = self._lake_dict[(c, r)]
+                                lake = None
+                                for i in lakes:
+                                    if full_lakes[i[0]]:
+                                        lake = i
+                                        break
+                                if lake is not None:
+                                    lines.append(
+                                        f"pref_act({c},{r},{h},{lake[2]}).")
+                                else:
+                                    lines.append(
+                                        f"pref_act({c},{r},{h},{-1}).")
 
         self._rnd = []
         # frogs

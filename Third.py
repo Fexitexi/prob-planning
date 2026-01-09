@@ -31,7 +31,9 @@ if __name__ == "__main__":
     q_agent.load_weights("weights.pkl")
 
     # test the new loop
-    obs, info = env.reset()
+    seed = random.randint(0, 1000000)
+    print(f"Seed: {seed}")
+    obs, info = env.reset(seed=seed)
     done = False
 
     state = ObservationState.from_obs(obs)

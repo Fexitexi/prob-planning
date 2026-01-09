@@ -6,10 +6,10 @@ agent(X,Y-1,T+1) :- agent(X,Y,T), action(3,T).    % move down
 agent(X,Y,T+1) :- agent(X,Y,T), action(4,T).    % do nothing
 
 % compute frog action w/ sampled lookup table
-f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref_act(X,Y,T,AP), act_pos(X,Y,A,O,N'), N = N' - 1, N > 0, A < AP, R >= O * (30 / N), R < (O + 1) * (30 / N).
-f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref_act(X,Y,T,AP), act_pos(X,Y,A,O,N'), N = N' - 1, N > 0, A = AP, R >= O * (30 / N), R < O * (30 / N) + 70.
-f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref_act(X,Y,T,AP), act_pos(X,Y,A,O,N'), N = N' - 1, N = 0, A = AP.
-f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref_act(X,Y,T,AP), act_pos(X,Y,A,O,N'), N = N' - 1, N > 0, A > AP, R >= 70 + (O - 1) * (30 / N), R < 70 + O * (30 / N).
+f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref_act(X,Y,T,AP), act_pos(X,Y,A,O,N'), N = N' - 1, N' > 1, A < AP, R >= O * (30 / N), R < (O + 1) * (30 / N).
+f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref_act(X,Y,T,AP), act_pos(X,Y,A,O,N'), N = N' - 1, N' > 1, A = AP, R >= O * (30 / N), R < O * (30 / N) + 70.
+f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref_act(X,Y,T,AP), act_pos(X,Y,A,O,N'), N = N' - 1, N' = 1, A = AP.
+f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref_act(X,Y,T,AP), act_pos(X,Y,A,O,N'), N = N' - 1, N' > 1, A > AP, R >= 70 + (O - 1) * (30 / N), R < 70 + O * (30 / N).
 f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref_act(X,Y,T,-1), act_pos(X,Y,A,O,N), R >= O * (100 / N), R < (O + 1) * (100 / N).
 
 % compute frog movement
