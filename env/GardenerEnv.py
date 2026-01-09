@@ -328,6 +328,7 @@ class GardenerEnv(gym.Env):
     def simulate_samples(self, horizon, q_agent, actions):
         # simulate the environment for a certain horizon
         # return FALSE if the simulation violates the a norm
+        executed_actions = []
         state = self._state.fast_clone()
         for h in range(horizon):
             if len(actions) > h:
@@ -336,9 +337,10 @@ class GardenerEnv(gym.Env):
                 action = q_agent.getAction(state)
             self._dynamics.move_agent(state, action)
             self._dynamics.move_frogs(state)
+            executed_actions.append(action)
             if np.any(np.all(state.agent == state.frogs, axis=1)):
-                return False
-        return True
+                return False, executed_actions
+        return True, executed_actions
 
 
     def sample(self, horizon, size):

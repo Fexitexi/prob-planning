@@ -15,6 +15,7 @@ class ASPTransformer:
 
     def __init__(self, q_agent):
         self._static = None
+        self._dynamic = None
         self._state = None
         self._dynamics = GardenerDynamics()
         self._q_agent = q_agent
@@ -22,6 +23,21 @@ class ASPTransformer:
         self._rnd = None
         self._lake_dict = None
         self._dyn_lake_dict = None
+        self._constraints = []
+        self._check = None
+        self._generate = None
+        self._horizon = None
+
+    def reset(self):
+        self._state = None
+        self._rnd = None
+        self._dyn_lake_dict = None
+        self._latest_model = None
+        self._constraints.clear()
+        self._check = None
+        self._generate = None
+        self._dynamic = None
+
 
     def build_static(self, state, horizon) -> str:
         lines = []
@@ -90,6 +106,7 @@ class ASPTransformer:
         lines.append(f"#const grass_respawn={state.grass_respawn}.")
         lines.append(f"#const lake_respawn={state.lake_respawn}.")
         lines.append("")
+        self._horizon = horizon
 
         # constant atoms: walls
         line = ""
@@ -126,8 +143,21 @@ class ASPTransformer:
             line += f"grass({c}, {r}, {i})."
         lines.append(line)
 
-        self.static = "\n".join(lines)
+        self._static = "\n".join(lines)
         return "\n".join(lines)
+
+    def add_constraint(self, actions):
+        line = ":-"
+        for i,a in enumerate(actions):
+            line += f" action({a}, {i}),"
+        line = line.removesuffix(",")
+        line+="."
+        if line not in self._constraints:
+            #print(f"Adding constraint: {line}")
+            self._constraints.insert(0, line)
+            return False
+        else:
+            return True
 
     def build_dynamic(self, state) -> str:
         self._state = state
@@ -150,7 +180,7 @@ class ASPTransformer:
 
         return "\n".join(lines)
 
-    def build_dynamic_worlds(self, state, num_worlds, horizon) -> str:
+    def build_dynamic_worlds(self, state, num_worlds, horizon, append_lines=True) -> str:
         self._state = state
         lines = []
 
@@ -234,15 +264,15 @@ class ASPTransformer:
             random_world = []
             for f, (c,r) in enumerate(state.frogs):
                 random_frog = []
-                lines.append(f"frog({c}, {r}, {f}, 0, {i}).")
+                if append_lines: lines.append(f"frog({c}, {r}, {f}, 0, {i}).")
                 for t in range(horizon):
                     ran = random.random()
-                    lines.append(f"f_rnd({f}, {t}, {i}, {int(ran * 100)}).")
+                    if append_lines: lines.append(f"f_rnd({f}, {t}, {i}, {int(ran * 100)}).")
                     random_frog.append(ran)
                 random_world.append(random_frog)
             self._rnd.append(random_world)
 
-
+        self._dynamic = "\n".join(lines)
         return "\n".join(lines)
 
     def build_worlds(self, worlds) -> str:
@@ -256,6 +286,78 @@ class ASPTransformer:
             lines.append(line)
 
         return "\n".join(lines)
+
+    def call_clingo_generate(self, state, violations):
+        lines = []
+        for constraint in self._constraints:
+            lines.append(constraint)
+        if violations:
+            # activate worlds here
+            for i in violations:
+                for f, (c,r) in enumerate(state.frogs):
+                    lines.append(
+                        f"frog({c}, {r}, {f}, 0, {i}).")
+                    for t in range(self._horizon):
+                        ran = self._rnd[i][f][t]
+                        lines.append(
+                            f"f_rnd({f}, {t}, {i}, {int(ran * 100)}).")
+        worlds = "\n".join(lines)
+        self._latest_model = None
+        with open("generate.lp", "r") as f:
+            program = f.read()
+        self._generate = clingo.Control()
+        self._generate.add("base", [], f"{self._static}\n{self._dynamic}\n{program}\n{worlds}")
+        self._generate.ground([("base", [])], context=self)
+        self._generate.solve(on_model=self.on_model)
+        actions = [-1] * self._horizon
+        #todo what if latest model is none
+        for sym in self._latest_model:
+            if sym.name == "action" and len(sym.arguments) == 2:
+                actions[sym.arguments[1].number] = sym.arguments[0].number
+        return actions
+
+    def call_clingo_check(self, state, actions):
+        self._latest_model = None
+        with open("check.lp", "r") as f:
+            program = f.read()
+        self._check = clingo.Control()
+        self._check.add("base", [], f"{self._static}\n{program}")
+
+        # add frogs and agent
+        lines = []
+        lines.append(f"agent({state.agent[0]}, {state.agent[1]}, 0).")
+
+        h = "1"
+        for i, a in enumerate(actions):
+            lines.append(f"action({a}, {i}).")
+            h += str(a)
+            full_lakes = self._dyn_lake_dict[h]
+            for (c, r) in self._lake_dict:
+                lakes = self._lake_dict[(c,r)]
+                lake = None
+                for j in lakes:
+                    if full_lakes[j[0]]:
+                        lake = j
+                        break
+                if lake is not None:
+                    lines.append(f"pref_act({c},{r},{i},{lake[2]}).")
+                else:
+                    lines.append(f"pref_act({c},{r},{i},{-1}).")
+
+        for i in range(len(self._rnd)):
+            for f, (c,r) in enumerate(state.frogs):
+                lines.append(f"frog({c}, {r}, {f}, 0, {i}).")
+                for t in range(self._horizon):
+                    ran = self._rnd[i][f][t]
+                    lines.append(f"f_rnd({f}, {t}, {i}, {int(ran * 100)}).")
+        self._check.add("base", [], "\n".join(lines))
+        self._check.ground([("base", [])], context=self)
+        self._check.solve(on_model=self.on_model)
+        violations = []
+        for sym in self._latest_model:
+            if sym.name == "norm_violation" and len(sym.arguments) == 1:
+                violations.append(sym.arguments[0].number)
+        return violations
 
 
     def call_clingo_new(self, static, dynamic, horizon):
