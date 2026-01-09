@@ -61,10 +61,11 @@ class GardenerQAgent:
           HINT: You might want to use util.flipCoin(prob)
           HINT: To pick randomly from a list, use random.choice(list)
         """
-        legalActions = np.where(get_action_mask(state) == 1)[0]
-        if util.flipCoin(self.epsilon):
-            #print("Random Action")
-            return random.choice(legalActions)
+        if self.epsilon > 0.0:
+            legalActions = np.where(get_action_mask(state) == 1)[0]
+            if util.flipCoin(self.epsilon):
+                #print("Random Action")
+                return random.choice(legalActions)
 
         return self.computeActionFromQValues(state)
 

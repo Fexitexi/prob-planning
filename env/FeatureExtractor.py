@@ -1,4 +1,5 @@
-from env.dynamics import GardenerDynamics
+from env.dynamics import GardenerDynamics, _action_to_direction
+import numpy as np
 
 
 class FeatureExtractor:
@@ -25,66 +26,53 @@ class FeatureExtractor:
         Returns:
             int: number of steps in shortest path, or None if unreachable.
         """
-        # clone state to avoid modifying real environment
-        temp_state = state.fast_clone()
-
         # simulate agent move
-        self._dynamics.move_agent(temp_state, action)
+        direction = _action_to_direction[action]
+        ax, ay = state.agent + direction
+        
+        # Check if move is valid (not into wall, not out of bounds)
+        # Assuming state.pos_actions is available in observation state or similar
+        # If not, we might need to check bounds and walls manually.
+        # However, the Q-learning agent usually only calls this for legal actions.
+        # Let's assume the action is legal or at least check bounds.
+        if not (0 <= ax < state.size and 0 <= ay < state.size):
+             return 0.0 # Or handle invalid move appropriately
 
-        # Build obstacle set
-        size = temp_state.size
-        walls = {tuple(w) for w in temp_state.walls}
-        lakes = {tuple(l) for l in temp_state.lakes}
+        size = state.size
 
-        # choose target set
         if target_type == "grass":
-            targets = []
-            for (gx, gy), active in zip(temp_state.grass, temp_state.grass_active):
+            min_dist = np.iinfo(np.int32).max
+            for i, active in enumerate(state.grass_active):
                 if active:
-                    targets.append((gx, gy))
+                    # Use precomputed distance from state
+                    # state.grass_dist is a list of 2D arrays, one for each grass patch
+                    d = state.grass_dist[i][ax, ay]
+                    if d < min_dist:
+                        min_dist = d
+            
+            if min_dist == np.iinfo(np.int32).max:
+                return 0.0
+            return 1 - (min_dist / (size * size))
+
         elif target_type == "lake":
-            targets = []
-            for (lx, ly), full in zip(temp_state.lakes, temp_state.lakes_full):
-                if not full:
-                    continue
-                for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
-                    tx, ty = lx + dx, ly + dy
-                    if 0 <= tx < size and 0 <= ty < size:
-                        if (tx, ty) not in walls and (tx, ty) not in lakes:
-                            targets.append((tx, ty))
+            min_dist = np.iinfo(np.int32).max
+            for i, full in enumerate(state.lakes_full):
+                if full:
+                    # Use precomputed distance from state
+                    # state.lake_dist is a list of 2D arrays, one for each lake
+                    d = state.lake_dist[i][ax, ay]
+                    if d < min_dist:
+                        min_dist = d
+            
+            if min_dist == np.iinfo(np.int32).max:
+                return 0.0
+            
+            if min_dist < 5:
+                return 1 - (min_dist / 5)
+            else:
+                return 0.0
         else:
             return None
-
-        from collections import deque
-        ax, ay = temp_state.agent
-        start = (ax, ay)
-
-        # BFS
-        visited = set([start])
-        q = deque([(start, 0)])
-        while q:
-            (x, y), d = q.popleft()
-            if (x, y) in targets:
-                # normalize distance here to the instance size
-                if target_type == "grass":
-                    return 1 - (d / (size * size))
-                if target_type == "lake":
-                    if d < 5:
-                        return 1 - (d / 5)
-                    else:
-                        return 0.0
-            for dx, dy in [(1,0), (-1,0), (0,1), (0,-1)]:
-                nx, ny = x + dx, y + dy
-                if 0 <= nx < size and 0 <= ny < size:
-                    if (nx, ny) in visited:
-                        continue
-                    if (nx, ny) in walls:
-                        continue
-                    if (nx, ny) in lakes:
-                        continue
-                    visited.add((nx, ny))
-                    q.append(((nx, ny), d + 1))
-        return 0.0
 
     def will_reach_target_after_action(self, state, action, target_type):
         """
@@ -93,21 +81,18 @@ class FeatureExtractor:
             - any cell adjacent to a full lake     (target_type == "lake")
         Otherwise returns False.
         """
-        temp_state = state.fast_clone()
-        temp_state_prev = state.fast_clone()
-        self._dynamics.move_agent(temp_state, action)
-
-        ax, ay = temp_state.agent
+        direction = _action_to_direction[action]
+        ax, ay = state.agent + direction
 
         if target_type == "grass":
-            for (gx, gy), active in zip(temp_state_prev.grass, temp_state_prev.grass_active):
+            for (gx, gy), active in zip(state.grass, state.grass_active):
                 if active and (ax, ay) == (gx, gy):
                     return 1.0
             return 0.0
 
         if target_type == "lake":
-            for i, (lx, ly) in enumerate(temp_state_prev.lakes):
-                if temp_state_prev.lakes_full[i]:
+            for i, (lx, ly) in enumerate(state.lakes):
+                if state.lakes_full[i]:
                     if abs(ax - lx) + abs(ay - ly) == 1:
                         return 1.0
             return 0.0

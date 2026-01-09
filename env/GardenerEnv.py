@@ -4,8 +4,7 @@ from typing import Optional
 import gymnasium as gym
 import numpy as np
 
-from env.dynamics import GardenerDynamics, get_action_mask_pos, \
-    _action_to_direction
+from env.dynamics import GardenerDynamics, _action_to_direction
 from env.rendering import GardenerRenderer
 from env.state import GardenerState
 
@@ -63,6 +62,8 @@ class GardenerEnv(gym.Env):
              "walls": gym.spaces.Box(0, size - 1, shape=(num_walls, 2),
                                      dtype=int),
              "pos_actions": gym.spaces.Box(0, 1, shape=(size, size, 5), dtype=int),
+             "lake_dist": gym.spaces.Box(0, np.iinfo(np.int32).max, shape=(num_lakes, size, size), dtype=int),
+             "grass_dist": gym.spaces.Box(0, np.iinfo(np.int32).max, shape=(num_grass, size, size), dtype=int),
              })
 
 
@@ -87,7 +88,9 @@ class GardenerEnv(gym.Env):
                 "grass_active": self._state.grass_active,
                 "grass_timer": self._state.grass_timer,
                 "walls": self._state.walls,
-                "pos_actions": self._state.pos_actions}
+                "pos_actions": self._state.pos_actions,
+                "lake_dist": np.array(self._state.lake_dist, dtype=int),
+                "grass_dist": np.array(self._state.grass_dist, dtype=int)}
 
     def _get_info(self):
         """Compute auxiliary information for debugging.
@@ -285,6 +288,29 @@ class GardenerEnv(gym.Env):
 
         self._state.lake_dist = lake_dist
         self._state.lake_best_step = lake_best_step
+
+        # Precompute grass distances
+        grass_dist = []
+        for (gx, gy) in grass_positions:
+            dist = np.full((size, size), np.iinfo(np.int32).max, dtype=np.int32)
+            q = deque()
+            q.append((gx, gy))
+            dist[gx, gy] = 0
+            
+            while q:
+                x, y = q.popleft()
+                for dx, dy in [(1,0), (-1,0), (0,1), (0,-1)]:
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < size and 0 <= ny < size:
+                        if (nx, ny) in walls_set:
+                            continue
+                        if (nx, ny) in lakes_set:
+                            continue
+                        if dist[nx, ny] > dist[x, y] + 1:
+                            dist[nx, ny] = dist[x, y] + 1
+                            q.append((nx, ny))
+            grass_dist.append(dist)
+        self._state.grass_dist = grass_dist
 
 
         # np_random.choice returns a 1D array if input is 1D, so convert to

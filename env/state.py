@@ -8,11 +8,12 @@ class GardenerState:
     frogs: np.ndarray
     lakes: np.ndarray
     lakes_full: np.ndarray
-    lake_dist: np.ndarray
-    lake_best_step: np.ndarray
+    lake_dist: list
+    lake_best_step: list
     lake_dict: dict
     lake_timer: np.ndarray
     grass: np.ndarray
+    grass_dist: list
     grass_active: np.ndarray
     grass_timer: np.ndarray
     walls: np.ndarray
@@ -35,11 +36,12 @@ class GardenerState:
         new.walls = self.walls.copy()
         new.frogs = self.frogs.copy()
         new.lakes = self.lakes.copy()
-        new.lake_dist = self.lake_dist.copy()
-        new.lake_best_step = self.lake_best_step.copy()
+        new.lake_dist = self.lake_dist # these are read-only maps
+        new.lake_best_step = self.lake_best_step # these are read-only maps
         new.lakes_full = self.lakes_full.copy()
-        new.lake_dict = self.lake_dict.copy()
+        new.lake_dict = self.lake_dict # read-only
         new.lake_timer = self.lake_timer.copy()
+        new.grass_dist = self.grass_dist # read-only
         return new
 
 @dataclass
@@ -57,6 +59,8 @@ class ObservationState:
     grass_respawn: int
     lake_respawn: int
     pos_actions: np.ndarray
+    lake_dist: np.ndarray
+    grass_dist: np.ndarray
 
     @staticmethod
     def from_obs(obs):
@@ -73,7 +77,9 @@ class ObservationState:
             size=obs["size"],
             grass_respawn=obs["grass_respawn"],
             lake_respawn=obs["lake_respawn"],
-            pos_actions=obs["pos_actions"]
+            pos_actions=obs["pos_actions"],
+            lake_dist=obs["lake_dist"],
+            grass_dist=obs["grass_dist"]
         )
 
     def fast_clone(self):
@@ -91,4 +97,6 @@ class ObservationState:
             grass_respawn=self.grass_respawn,
             lake_respawn=self.lake_respawn,
             pos_actions=self.pos_actions.copy(),
+            lake_dist=self.lake_dist, # read-only
+            grass_dist=self.grass_dist # read-only
         )
