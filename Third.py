@@ -20,9 +20,13 @@ if __name__ == "__main__":
     gar = env.unwrapped
 
     # parameter
+    actions = 5
     horizon = 3
     n_rot = 60
-    n_asp = 1700
+    epsilon = 0.05
+    delta = 0.05
+    n_asp = math.ceil((1/(2 * math.pow(epsilon, 2))) * math.log((2*math.pow(actions, horizon))/delta))
+    print(f"Number of asp: {n_asp}")
 #
     # load the pre-trained weights
     q_agent = GardenerQAgent()
