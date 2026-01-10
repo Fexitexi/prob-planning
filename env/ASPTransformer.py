@@ -117,6 +117,7 @@ class ASPTransformer:
         # encode possible actions of frogs
         line = ""
 
+        done = []
         for (c_f,r_f) in state.frogs:
             c_min = c_f - horizon
             c_max = c_f + horizon
@@ -126,16 +127,19 @@ class ASPTransformer:
                 if 0 <= c < state.size:
                     for r in range(r_min, r_max + 1):
                         if 0 <= r < state.size:
-                            is_wall = np.any(np.all(state.walls == [c, r], axis=1))
-                            is_lake = np.any(np.all(state.lakes == [c, r], axis=1))
-                            if not is_wall and not is_lake:
-                                pos_actions = []
-                                # Use the precomputed pos_actions array from state
-                                for i in range(4):
-                                    if state.pos_actions[c, r, i] == 1:
-                                        pos_actions.append(i)
-                                for i, action in enumerate(pos_actions):
-                                    line += f"act_pos({c}, {r}, {action}, {i}, {len(pos_actions)})."
+                            dist = abs(c_f - c) + abs(r_f - r)
+                            if (c,r) not in done and dist < horizon:
+                                done.append((c,r))
+                                is_wall = np.any(np.all(state.walls == [c, r], axis=1))
+                                is_lake = np.any(np.all(state.lakes == [c, r], axis=1))
+                                if not is_wall and not is_lake:
+                                    pos_actions = []
+                                    # Use the precomputed pos_actions array from state
+                                    for i in range(4):
+                                        if state.pos_actions[c, r, i] == 1:
+                                            pos_actions.append(i)
+                                    for i, action in enumerate(pos_actions):
+                                        line += f"act_pos({c}, {r}, {action}, {i}, {len(pos_actions)})."
         lines.append(line)
 
         # constant atoms: lakes
@@ -260,7 +264,8 @@ class ASPTransformer:
                 r_max = r_f + horizon
                 for c in range(c_min, c_max + 1):
                     for r in range(r_min, r_max + 1):
-                        if (c,r) not in done:
+                        dist = abs(c_f - c) + abs(r_f - r)
+                        if (c,r) not in done and dist < horizon:
                             done.append((c,r))
                             if (c, r) in self._lake_dict:
                                 lakes = self._lake_dict[(c, r)]
