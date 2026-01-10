@@ -40,6 +40,9 @@ if __name__ == "__main__":
     static = asp_transformer.build_static(state, horizon)
     actions = []
     step = 0
+    full_gen_time = 0
+    full_check_time = 0
+    all_iterations = 0
     while not done:
         step += 1
         #print(f"Step: {step}")
@@ -93,14 +96,18 @@ if __name__ == "__main__":
                     actions = policy_fix
                     action = actions.pop(0)
             print(f"Time for generating worlds: {generate_time_sum:.6f} seconds, Time for checking worlds: {check_time_sum:.6f} seconds, Number of iterations: {count}.")
+            full_check_time += check_time_sum
+            full_gen_time += generate_time_sum
+            all_iterations += count
 
         obs, reward, terminated, truncated, info = env.step(action)
         state = ObservationState.from_obs(obs)
         elapsed = time.time() - start_time
-        sleep = max(0, 0.1 - elapsed)
+        sleep = max(0, 0.0 - elapsed)
         time.sleep(sleep)
         env.render()
         done = terminated or truncated
+    print(f"Full generation time: {full_gen_time/all_iterations:.6f} seconds, Full checking time: {full_check_time/all_iterations:.6f} seconds.")
 
 
 

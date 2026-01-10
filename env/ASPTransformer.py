@@ -108,12 +108,6 @@ class ASPTransformer:
         lines.append("")
         self._horizon = horizon
 
-        # constant atoms: walls
-        line = ""
-        for (c, r) in state.walls:
-            line += f"wall({c}, {r})."
-        lines.append(line)
-
         # encode possible actions of frogs
         line = ""
 
@@ -143,17 +137,21 @@ class ASPTransformer:
         #                                line += f"act_pos({c}, {r}, {action}, {i}, {len(pos_actions)})."
         #lines.append(line)
 
-        # constant atoms: lakes
-        line = ""
-        for i, (c, r) in enumerate(state.lakes):
-            line += f"lake({c}, {r}, {i})."
-        lines.append(line)
-
-        # constant atoms: grass
-        line = ""
-        for i, (c, r) in enumerate(state.grass):
-            line += f"grass({c}, {r}, {i})."
-        lines.append(line)
+        ## constant atoms: lakes
+        #line = ""
+        #for i, (c, r) in enumerate(state.lakes):
+        #    line += f"lake({c}, {r}, {i})."
+        #lines.append(line)
+        ## constant atoms: grass
+        #line = ""
+        #for i, (c, r) in enumerate(state.grass):
+        #    line += f"grass({c}, {r}, {i})."
+        #lines.append(line)
+        ## constant atoms: walls
+        #line = ""
+        #for (c, r) in state.walls:
+        #    line += f"wall({c}, {r})."
+        #lines.append(line)
 
         self._static = "\n".join(lines)
         return "\n".join(lines)
@@ -321,6 +319,25 @@ class ASPTransformer:
                                             pos_actions.append(i)
                                     for i, action in enumerate(pos_actions):
                                         lines.append(f"act_pos({c}, {r}, {action}, {i}, {len(pos_actions)}).")
+
+        # agent window
+        c_min = state.agent[0] - horizon
+        c_max = state.agent[0] + horizon
+        r_min = state.agent[1] - horizon
+        r_max = state.agent[1] + horizon
+        for c in range(c_min, c_max + 1):
+            for r in range(r_min, r_max + 1):
+                dist = abs(state.agent[0] - c) + abs(state.agent[1] - r)
+                if dist <= horizon:
+                    is_wall = np.any(
+                        np.all(state.walls == [c, r], axis=1))
+                    is_lake = np.any(
+                        np.all(state.lakes == [c, r], axis=1))
+                    if is_wall:
+                        lines.append(f"wall({c}, {r}).")
+                    elif is_lake:
+                        lines.append(f"lake({c}, {r}).")
+
 
         self._dynamic = "\n".join(lines)
         return "\n".join(lines)

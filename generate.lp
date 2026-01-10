@@ -21,7 +21,7 @@ action_reward(@compute_reward(H), T) :- history(H, T).
 
 % can't go through walls or lakes
 :- agent(X,Y,T), wall(X,Y).
-:- agent(X,Y,T), lake(X,Y,I).
+:- agent(X,Y,T), lake(X,Y).
 
 % compute frog action w/ sampled lookup table
 f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref_act(X,Y,H,AP), history(H,T), act_pos(X,Y,A,O,N'), N = N' - 1, N' > 1, A < AP, R >= O * (30 / N), R < (O + 1) * (30 / N).
