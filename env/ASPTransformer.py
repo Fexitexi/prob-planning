@@ -383,7 +383,7 @@ class ASPTransformer:
                 actions[sym.arguments[1].number] = sym.arguments[0].number
         return actions
 
-    def call_clingo_check(self, state, actions):
+    def call_clingo_check(self, state, actions, exclude_worlds):
         self._latest_model = None
         with open("check.lp", "r") as f:
             program = f.read()
@@ -412,6 +412,7 @@ class ASPTransformer:
                     lines.append(f"pref_act({c},{r},{i},{-1}).")
 
         for i in range(len(self._rnd)):
+            if i in exclude_worlds: continue
             for f, (c,r) in enumerate(state.frogs):
                 lines.append(f"frog({c}, {r}, {f}, 0, {i}).")
                 for t in range(self._horizon):

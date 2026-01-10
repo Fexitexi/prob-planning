@@ -46,3 +46,5 @@ norm_violation(W) :- agent(X,Y,T), frog(X,Y,I,T,W).
 #show frog/5.
 #show action/2.
 #defined f_rnd/4.
+#defined wall/2.
+#defined lake/2.
