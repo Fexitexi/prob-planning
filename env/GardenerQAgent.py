@@ -85,7 +85,7 @@ class GardenerQAgent:
         bestActions = list(
             filter(lambda x: x[1] == maxValue, actionValuePairs))
         #print(f"Best actions: {bestActions}, value: {maxValue}")
-        return bestActions[0][0]
+        return random.choice(bestActions)[0]
 
     def getBestActions(self, state):
         actionValuePairs = [(action, self.getQValue(state, action))
