@@ -13,6 +13,17 @@ history(H,T) :- history(H',T-1), action(A,T), H = H' * 10 + A.
 % compute reward
 action_reward(@compute_reward(H), T) :- history(H, T).
 
+% lakes
+lake_agent_prox(I,T) :- lake(X1,Y1,I), agent(X2,Y2,T), |X1 - X2| + |Y1 - Y2| = 1.
+lake_timer(I,C-1,T+1) :- lake_timer(I,C,T), C!=0, T<horizon.
+lake_timer(I,0,T+1) :- lake_timer(I,0,T), T<horizon, not lake_agent_prox(I,T).
+lake_timer(I,lake_respawn,T+1) :- lake_timer(I,0,T), lake_agent_prox(I,T), T<horizon.
+
+pref(X,Y,T,A) :- lake_order(X,Y,I,O), lake_timer(I,0,T), lake_action(X,Y,I,A), not has_smaller_active(X,Y,I,T).
+pref(X,Y,T,-1) :- lake_order(X,Y,I,_), lake_timer(I,_,T), not any_lake_active(T).
+any_lake_active(T) :- lake_timer(_,0,T).
+has_smaller_active(X,Y,I,T) :- lake_timer(I, 0, T), lake_order(X, Y, I, O), lake_timer(I_Other, 0, T), lake_order(X, Y, I, O_Other),O_Other < O.
+
 % can't leave the grid
 :- agent(X,Y,T), X < 0.
 :- agent(X,Y,T), X > size - 1.
@@ -24,11 +35,11 @@ action_reward(@compute_reward(H), T) :- history(H, T).
 :- agent(X,Y,T), lake(X,Y).
 
 % compute frog action w/ sampled lookup table
-f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref_act(X,Y,H,AP), history(H,T), act_pos(X,Y,A,O,N'), N = N' - 1, N' > 1, A < AP, R >= O * (30 / N), R < (O + 1) * (30 / N).
-f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref_act(X,Y,H,AP), history(H,T), act_pos(X,Y,A,O,N'), N = N' - 1, N' > 1, A = AP, R >= O * (30 / N), R < O * (30 / N) + 70.
-f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref_act(X,Y,H,AP), history(H,T), act_pos(X,Y,A,O,N'), N = N' - 1, N' = 1, A = AP.
-f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref_act(X,Y,H,AP), history(H,T), act_pos(X,Y,A,O,N'), N = N' - 1, N' > 1, A > AP, R >= 70 + (O - 1) * (30 / N), R < 70 + O * (30 / N).
-f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref_act(X,Y,H,-1), history(H,T), act_pos(X,Y,A,O,N), R >= O * (100 / N), R < (O + 1) * (100 / N).
+f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), act_pos(X,Y,A,O,N'), N = N' - 1, N' > 1, A < AP, R >= O * (30 / N), R < (O + 1) * (30 / N).
+f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), act_pos(X,Y,A,O,N'), N = N' - 1, N' > 1, A = AP, R >= O * (30 / N), R < O * (30 / N) + 70.
+f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), act_pos(X,Y,A,O,N'), N = N' - 1, N' = 1, A = AP.
+f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), act_pos(X,Y,A,O,N'), N = N' - 1, N' > 1, A > AP, R >= 70 + (O - 1) * (30 / N), R < 70 + O * (30 / N).
+f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,-1), act_pos(X,Y,A,O,N), R >= O * (100 / N), R < (O + 1) * (100 / N).
 
 % compute frog movement
 frog(X+1,Y,I,T+1,W) :- frog(X,Y,I,T,W), f_action(0,I,T,W).    % move right
@@ -48,3 +59,7 @@ norm_violation(W) :- agent(X,Y,T), frog(X,Y,I,T,W).
 #defined f_rnd/4.
 #defined wall/2.
 #defined lake/2.
+#show pref/4.
+#defined act_pos/5.
+#defined lake_order/4.
+#defined lake_action/4.

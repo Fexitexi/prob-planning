@@ -80,12 +80,14 @@ if __name__ == "__main__":
                 count += 1
                 generate_time = time.time()
                 policy_fix = asp_transformer.call_clingo_generate(state, violations)
-                generate_time_sum += time.time() - generate_time
+                generate_time_new = time.time() - generate_time
+                generate_time_sum+= generate_time_new
                 check_time = time.time()
 
                 new_violations = asp_transformer.call_clingo_check(state, policy_fix, violations)
-                check_time_sum += time.time() - check_time
-                print(f"Number of violations: {len(new_violations)} with gen time: {time.time() - generate_time:.6f} and check time: {time.time() - check_time:.6f} seconds.")
+                check_time_new = time.time() - check_time
+                check_time_sum+= check_time_new
+                print(f"Number of violations: {len(new_violations)} with gen time: {generate_time_new:.6f} and check time: {check_time_new:.6f} seconds.")
                 for violation in new_violations:
                     if violation not in violations: violations.append(violation)
                 if len(new_violations) > 0:
