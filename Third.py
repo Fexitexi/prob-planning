@@ -33,13 +33,16 @@ if __name__ == "__main__":
     # test the new loop
     seed = random.randint(0, 1000000)
     print(f"Seed: {seed}")
-    obs, info = env.reset(seed=seed)
+    obs, info = env.reset(seed=318687)
     done = False
 
     state = ObservationState.from_obs(obs)
     static = asp_transformer.build_static(state, horizon)
     actions = []
+    step = 0
     while not done:
+        step += 1
+        #print(f"Step: {step}")
         start_time = time.time()
         # check rule of three
         rot = True
@@ -74,7 +77,7 @@ if __name__ == "__main__":
                 check_time = time.time()
 
                 new_violations = asp_transformer.call_clingo_check(state, policy_fix)
-                print(f"Number of violations: {len(new_violations)}")
+                print(f"Number of violations: {len(new_violations)} with actions: {policy_fix}")
                 check_time_sum += time.time() - check_time
                 for violation in new_violations:
                     if violation not in violations: violations.append(violation)

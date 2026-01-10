@@ -117,30 +117,31 @@ class ASPTransformer:
         # encode possible actions of frogs
         line = ""
 
-        done = []
-        for (c_f,r_f) in state.frogs:
-            c_min = c_f - horizon
-            c_max = c_f + horizon
-            r_min = r_f - horizon
-            r_max = r_f + horizon
-            for c in range(c_min, c_max + 1):
-                if 0 <= c < state.size:
-                    for r in range(r_min, r_max + 1):
-                        if 0 <= r < state.size:
-                            dist = abs(c_f - c) + abs(r_f - r)
-                            if (c,r) not in done and dist < horizon:
-                                done.append((c,r))
-                                is_wall = np.any(np.all(state.walls == [c, r], axis=1))
-                                is_lake = np.any(np.all(state.lakes == [c, r], axis=1))
-                                if not is_wall and not is_lake:
-                                    pos_actions = []
-                                    # Use the precomputed pos_actions array from state
-                                    for i in range(4):
-                                        if state.pos_actions[c, r, i] == 1:
-                                            pos_actions.append(i)
-                                    for i, action in enumerate(pos_actions):
-                                        line += f"act_pos({c}, {r}, {action}, {i}, {len(pos_actions)})."
-        lines.append(line)
+        # moved to dynamic
+        #done = []
+        #for (c_f,r_f) in state.frogs:
+        #    c_min = c_f - horizon
+        #    c_max = c_f + horizon
+        #    r_min = r_f - horizon
+        #    r_max = r_f + horizon
+        #    for c in range(c_min, c_max + 1):
+        #        if 0 <= c < state.size:
+        #            for r in range(r_min, r_max + 1):
+        #                if 0 <= r < state.size:
+        #                    dist = abs(c_f - c) + abs(r_f - r)
+        #                    if (c,r) not in done and dist <= horizon:
+        #                        done.append((c,r))
+        #                        is_wall = np.any(np.all(state.walls == [c, r], axis=1))
+        #                        is_lake = np.any(np.all(state.lakes == [c, r], axis=1))
+        #                        if not is_wall and not is_lake:
+        #                            pos_actions = []
+        #                            # Use the precomputed pos_actions array from state
+        #                            for i in range(4):
+        #                                if state.pos_actions[c, r, i] == 1:
+        #                                    pos_actions.append(i)
+        #                            for i, action in enumerate(pos_actions):
+        #                                line += f"act_pos({c}, {r}, {action}, {i}, {len(pos_actions)})."
+        #lines.append(line)
 
         # constant atoms: lakes
         line = ""
@@ -295,6 +296,32 @@ class ASPTransformer:
                 random_world.append(random_frog)
             self._rnd.append(random_world)
 
+        done = []
+        for (c_f, r_f) in state.frogs:
+            c_min = c_f - horizon
+            c_max = c_f + horizon
+            r_min = r_f - horizon
+            r_max = r_f + horizon
+            for c in range(c_min, c_max + 1):
+                if 0 <= c < state.size:
+                    for r in range(r_min, r_max + 1):
+                        if 0 <= r < state.size:
+                            dist = abs(c_f - c) + abs(r_f - r)
+                            if (c, r) not in done and dist < horizon:
+                                done.append((c, r))
+                                is_wall = np.any(
+                                    np.all(state.walls == [c, r], axis=1))
+                                is_lake = np.any(
+                                    np.all(state.lakes == [c, r], axis=1))
+                                if not is_wall and not is_lake:
+                                    pos_actions = []
+                                    # Use the precomputed pos_actions array from state
+                                    for i in range(4):
+                                        if state.pos_actions[c, r, i] == 1:
+                                            pos_actions.append(i)
+                                    for i, action in enumerate(pos_actions):
+                                        lines.append(f"act_pos({c}, {r}, {action}, {i}, {len(pos_actions)}).")
+
         self._dynamic = "\n".join(lines)
         return "\n".join(lines)
 
@@ -373,10 +400,39 @@ class ASPTransformer:
                 for t in range(self._horizon):
                     ran = self._rnd[i][f][t]
                     lines.append(f"f_rnd({f}, {t}, {i}, {int(ran * 100)}).")
+
+
+        done = []
+        for (c_f, r_f) in state.frogs:
+            c_min = c_f - self._horizon
+            c_max = c_f + self._horizon
+            r_min = r_f - self._horizon
+            r_max = r_f + self._horizon
+            for c in range(c_min, c_max + 1):
+                if 0 <= c < state.size:
+                    for r in range(r_min, r_max + 1):
+                        if 0 <= r < state.size:
+                            dist = abs(c_f - c) + abs(r_f - r)
+                            if (c, r) not in done and dist < self._horizon:
+                                done.append((c, r))
+                                is_wall = np.any(
+                                    np.all(state.walls == [c, r], axis=1))
+                                is_lake = np.any(
+                                    np.all(state.lakes == [c, r], axis=1))
+                                if not is_wall and not is_lake:
+                                    pos_actions = []
+                                    # Use the precomputed pos_actions array from state
+                                    for i in range(4):
+                                        if state.pos_actions[c, r, i] == 1:
+                                            pos_actions.append(i)
+                                    for i, action in enumerate(pos_actions):
+                                        lines.append(f"act_pos({c}, {r}, {action}, {i}, {len(pos_actions)}).")
+
         self._check.add("base", [], "\n".join(lines))
         self._check.ground([("base", [])], context=self)
         self._check.solve(on_model=self.on_model)
         violations = []
+        #print(self._latest_model)
         for sym in self._latest_model:
             if sym.name == "norm_violation" and len(sym.arguments) == 1:
                 violations.append(sym.arguments[0].number)
