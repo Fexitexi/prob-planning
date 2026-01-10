@@ -140,15 +140,15 @@ class ASPTransformer:
         #lines.append(line)
 
         ## constant atoms: lakes
-        #line = ""
+        line = ""
         for i, (c, r) in enumerate(state.lakes):
             line += f"lake({c}, {r}, {i})."
         lines.append(line)
         ## constant atoms: grass
-        #line = ""
-        #for i, (c, r) in enumerate(state.grass):
-        #    line += f"grass({c}, {r}, {i})."
-        #lines.append(line)
+        line = ""
+        for i, (c, r) in enumerate(state.grass):
+            line += f"grass({c}, {r}, {i})."
+        lines.append(line)
         ## constant atoms: walls
         #line = ""
         #for (c, r) in state.walls:
@@ -354,6 +354,14 @@ class ASPTransformer:
             for r in range(r_min, r_max + 1):
                 dist = abs(state.agent[0] - c) + abs(state.agent[1] - r)
                 if dist <= horizon:
+                    if (c, r) in self._lake_dict:
+                        for i, lake in enumerate(self._lake_dict[(c, r)]):
+                            lines.append(
+                                f"lake_action({c}, {r}, {lake[0]}, {lake[2]}).")
+                            lines.append(
+                                f"lake_order({c}, {r}, {lake[0]}, {i}).")
+                            lines.append(
+                                f"lake_dist({c}, {r}, {lake[1]}, {lake[0]}).")
                     is_wall = np.any(
                         np.all(state.walls == [c, r], axis=1))
                     is_lake = np.any(
@@ -541,6 +549,14 @@ class ASPTransformer:
         elapsed = time.time() - start_time
         #print(f"clingo took {elapsed:.6f} seconds")
         return actions
+
+    def compute_reward_new(self, lawn, lake):
+        lawn = lawn.number
+        lake = lake.number
+
+
+        return clingo.Number(0)
+
 
     def compute_reward(self, h):
         actions = []
