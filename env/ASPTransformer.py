@@ -420,17 +420,29 @@ class ASPTransformer:
             lines.append(f"action({a}, {i}).")
             h += str(a)
             full_lakes = self._dyn_lake_dict[h]
-            for (c, r) in self._lake_dict:
-                lakes = self._lake_dict[(c,r)]
-                lake = None
-                for j in lakes:
-                    if full_lakes[j[0]]:
-                        lake = j
-                        break
-                if lake is not None:
-                    lines.append(f"pref_act({c},{r},{i},{lake[2]}).")
-                else:
-                    lines.append(f"pref_act({c},{r},{i},{-1}).")
+            done = []
+            for f_i, (c_f,r_f) in enumerate(state.frogs):
+                if f_i not in self._frogs: continue
+                c_min = c_f - self._horizon
+                c_max = c_f + self._horizon
+                r_min = r_f - self._horizon
+                r_max = r_f + self._horizon
+                for c in range(c_min, c_max + 1):
+                    for r in range(r_min, r_max + 1):
+                        dist = abs(c_f - c) + abs(r_f - r)
+                        if (c,r) not in done and dist < self._horizon:
+                            done.append((c,r))
+                            if (c, r) in self._lake_dict:
+                                lakes = self._lake_dict[(c,r)]
+                                lake = None
+                                for j in lakes:
+                                    if full_lakes[j[0]]:
+                                        lake = j
+                                        break
+                                if lake is not None:
+                                    lines.append(f"pref_act({c},{r},{i},{lake[2]}).")
+                                else:
+                                    lines.append(f"pref_act({c},{r},{i},{-1}).")
 
         for i in range(len(self._rnd)):
             if i in exclude_worlds: continue
