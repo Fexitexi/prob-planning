@@ -27,6 +27,7 @@ class ASPTransformer:
         self._check = None
         self._generate = None
         self._horizon = None
+        self._frogs = []
 
     def reset(self):
         self._state = None
@@ -37,6 +38,7 @@ class ASPTransformer:
         self._check = None
         self._generate = None
         self._dynamic = None
+        self._frogs.clear()
 
 
     def build_static(self, state, horizon) -> str:
@@ -197,6 +199,22 @@ class ASPTransformer:
         # agent position
         lines.append(f"agent({state.agent[0]}, {state.agent[1]}, 0).")
 
+        # check the frogs in the "sphere" of the agent
+        # agent window
+        c_min = state.agent[0] - 2 * horizon
+        c_max = state.agent[0] + 2 * horizon
+        r_min = state.agent[1] - 2 * horizon
+        r_max = state.agent[1] + 2 * horizon
+        for c in range(c_min, c_max + 1):
+            for r in range(r_min, r_max + 1):
+                dist = abs(state.agent[0] - c) + abs(state.agent[1] - r)
+                if dist <= 2 * horizon:
+                    indices = np.where(np.all(state.frogs == [c, r], axis=1))[
+                        0]
+                    for i in indices:
+                        if i not in self._frogs:
+                            self._frogs.append(i)
+
         self._dyn_lake_dict = {}
 
         words = ["1"]
@@ -256,7 +274,8 @@ class ASPTransformer:
         for h in self._dyn_lake_dict:
             full_lakes = self._dyn_lake_dict[h]
             done = []
-            for (c_f,r_f) in state.frogs:
+            for f_i, (c_f,r_f) in enumerate(state.frogs):
+                if f_i not in self._frogs: continue
                 c_min = c_f - horizon
                 c_max = c_f + horizon
                 r_min = r_f - horizon
@@ -295,7 +314,8 @@ class ASPTransformer:
             self._rnd.append(random_world)
 
         done = []
-        for (c_f, r_f) in state.frogs:
+        for f_i, (c_f, r_f) in enumerate(state.frogs):
+            if f_i not in self._frogs: continue
             c_min = c_f - horizon
             c_max = c_f + horizon
             r_min = r_f - horizon
@@ -362,6 +382,7 @@ class ASPTransformer:
             # activate worlds here
             for i in violations:
                 for f, (c,r) in enumerate(state.frogs):
+                    if f not in self._frogs: continue
                     lines.append(
                         f"frog({c}, {r}, {f}, 0, {i}).")
                     for t in range(self._horizon):
@@ -414,6 +435,7 @@ class ASPTransformer:
         for i in range(len(self._rnd)):
             if i in exclude_worlds: continue
             for f, (c,r) in enumerate(state.frogs):
+                if f not in self._frogs: continue
                 lines.append(f"frog({c}, {r}, {f}, 0, {i}).")
                 for t in range(self._horizon):
                     ran = self._rnd[i][f][t]
@@ -421,7 +443,8 @@ class ASPTransformer:
 
 
         done = []
-        for (c_f, r_f) in state.frogs:
+        for i_f, (c_f, r_f) in enumerate(state.frogs):
+            if i_f not in self._frogs: continue
             c_min = c_f - self._horizon
             c_max = c_f + self._horizon
             r_min = r_f - self._horizon

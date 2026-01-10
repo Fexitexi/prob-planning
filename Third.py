@@ -80,8 +80,8 @@ if __name__ == "__main__":
                 check_time = time.time()
 
                 new_violations = asp_transformer.call_clingo_check(state, policy_fix, violations)
-                print(f"Number of violations: {len(new_violations)} with actions: {policy_fix}")
                 check_time_sum += time.time() - check_time
+                print(f"Number of violations: {len(new_violations)} with check time: {time.time() - check_time:.6f} seconds.")
                 for violation in new_violations:
                     if violation not in violations: violations.append(violation)
                 if len(new_violations) > 0:
