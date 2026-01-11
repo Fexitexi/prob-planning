@@ -45,6 +45,9 @@ class GardenerDynamics:
 
         for i in range(len(frogs)):
             fx, fy = frogs[i]
+            if state.dead_frogs[i]:
+                new_positions.append([fx, fy])
+                continue
             pos_tuple = (int(fx), int(fy))
             
             # Get valid moves from pre-computed array

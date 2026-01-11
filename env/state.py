@@ -6,6 +6,7 @@ class GardenerState:
     agent: np.ndarray
     pos_actions: dict
     frogs: np.ndarray
+    dead_frogs: np.ndarray
     lakes: np.ndarray
     lakes_full: np.ndarray
     lake_dist: list
@@ -35,6 +36,7 @@ class GardenerState:
         new.grass_timer = self.grass_timer.copy()
         new.walls = self.walls.copy()
         new.frogs = self.frogs.copy()
+        new.dead_frogs = self.dead_frogs.copy()
         new.lakes = self.lakes.copy()
         new.lake_dist = self.lake_dist # these are read-only maps
         new.lake_best_step = self.lake_best_step # these are read-only maps
@@ -50,6 +52,7 @@ class ObservationState:
     frogs: np.ndarray
     lakes: np.ndarray
     lakes_full: np.ndarray
+    dead_frogs: np.ndarray
     lake_timer: np.ndarray
     grass: np.ndarray
     grass_active: np.ndarray
@@ -69,6 +72,7 @@ class ObservationState:
             frogs=obs["frogs"],
             lakes=obs["lakes"],
             lakes_full=obs["lakes_full"],
+            dead_frogs=obs["dead_frogs"],
             lake_timer=obs["lake_timer"],
             grass=obs["grass"],
             grass_active=obs["grass_active"],
@@ -88,6 +92,7 @@ class ObservationState:
             frogs=self.frogs.copy(),
             lakes=self.lakes.copy(),
             lakes_full=self.lakes_full.copy(),
+            dead_frogs=self.dead_frogs.copy(),
             lake_timer=self.lake_timer.copy(),
             grass=self.grass.copy(),
             grass_active=self.grass_active.copy(),

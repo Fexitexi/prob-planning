@@ -20,7 +20,7 @@ class GardenerEnv(gym.Env):
         self._state.size = size
         self._state.grass_respawn = grass_respawn
         self._state.lake_respawn = lake_respawn
-        num_frogs = max(1, int(size * size * 0.01))
+        num_frogs = max(1, int(size * size * 0.03))
         num_lakes = max(1, int(size * size * 0.02))
         num_grass = max(1, int(size * size * 0.04))
         num_walls = int(size * size * 0.20)
@@ -30,6 +30,7 @@ class GardenerEnv(gym.Env):
         self._state.frogs = np.full((num_frogs, 2), -1, dtype=int)
         self._state.lakes = np.full((num_lakes, 2), -1, dtype=int)
         self._state.lakes_full = np.ones(num_lakes, dtype=bool)
+        self._state.dead_frogs = np.zeros(num_frogs, dtype=bool)
         self._state.lake_timer = np.zeros(num_lakes, dtype=int)
         self._state.grass = np.full((num_grass, 2), -1, dtype=int)
         # Each grass patch starts active. A timer is used for reactivation.
@@ -53,6 +54,8 @@ class GardenerEnv(gym.Env):
              "grass_respawn": gym.spaces.Discrete(grass_respawn + 1),
              "lake_respawn": gym.spaces.Discrete(lake_respawn + 1),
              "lakes_full": gym.spaces.Box(0, 1, shape=(num_lakes,),
+                                          dtype=bool),
+             "dead_frogs": gym.spaces.Box(0, 1, shape=(num_frogs,),
                                           dtype=bool),
              "lake_timer": gym.spaces.Box(0, lake_respawn, shape=(num_lakes,), dtype=int),
              "grass": gym.spaces.Box(0, size - 1, shape=(num_grass, 2),
@@ -83,6 +86,7 @@ class GardenerEnv(gym.Env):
                 "grass_respawn": self._state.grass_respawn,
                 "lakes": self._state.lakes,
                 "lakes_full": self._state.lakes_full,
+                "dead_frogs": self._state.dead_frogs,
                 "lake_timer": self._state.lake_timer,
                 "grass": self._state.grass,
                 "grass_active": self._state.grass_active,
@@ -415,9 +419,13 @@ class GardenerEnv(gym.Env):
 
         self._dynamics.move_frogs(self._state)
 
+        print(self._state.dead_frogs)
         if np.any(np.all(self._state.agent == self._state.frogs, axis=1)):
-            msg = "FROG KILLED!"
-            print(f"\033[31m{msg}\033[0m")
+            for i,(c,r) in enumerate(self._state.frogs):
+                if self._state.agent[0] == c and self._state.agent[1] == r:
+                    self._state.dead_frogs[i] = True
+                    msg = "FROG KILLED!"
+                    print(f"\033[31m{msg}\033[0m")
 
 
         reward = self.update_env(self._state, reward)

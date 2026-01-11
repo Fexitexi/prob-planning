@@ -188,12 +188,15 @@ class ASPTransformer:
 
         return "\n".join(lines)
 
-    def build_dynamic_worlds(self, state, num_worlds, horizon) -> str:
+    def build_dynamic_worlds(self, state, num_worlds, horizon, sips) -> str:
         self._state = state
         lines = []
 
         # agent position
         lines.append(f"agent({state.agent[0]}, {state.agent[1]}, 0).")
+
+        for s in sips:
+            lines.append(f"ctd({sips[s][0]}, {sips[s][1]}).")
 
         # check the frogs in the "sphere" of the agent
         # agent window
@@ -208,7 +211,7 @@ class ASPTransformer:
                     indices = np.where(np.all(state.frogs == [c, r], axis=1))[
                         0]
                     for i in indices:
-                        if i not in self._frogs:
+                        if i not in self._frogs and not self._state.dead_frogs[i]:
                             self._frogs.append(i)
 
         self._rnd = []
@@ -324,13 +327,13 @@ class ASPTransformer:
         self._generate.solve(on_model=self.on_model)
         actions = [-1] * self._horizon
         #todo what if latest model is none
-        #print(self._latest_model)
+        print(self._latest_model)
         for sym in self._latest_model:
             if sym.name == "action" and len(sym.arguments) == 2:
                 actions[sym.arguments[1].number] = sym.arguments[0].number
         return actions
 
-    def call_clingo_check(self, state, actions, exclude_worlds, n_rot, rot_count):
+    def call_clingo_check(self, state, actions, exclude_worlds, n_rot, rot_count, sips):
         if rot_count != -1:
             max_world = rot_count * n_rot
         else:
@@ -345,6 +348,9 @@ class ASPTransformer:
         # add frogs and agent
         lines = []
         lines.append(f"agent({state.agent[0]}, {state.agent[1]}, 0).")
+
+        for s in sips:
+            lines.append(f"ctd({sips[s][0]}, {sips[s][1]}).")
 
         for i, a in enumerate(actions):
             lines.append(f"action({a}, {i}).")

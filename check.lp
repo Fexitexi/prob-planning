@@ -6,7 +6,8 @@ agent(X,Y-1,T+1) :- agent(X,Y,T), action(3,T).    % move down
 agent(X,Y,T+1) :- agent(X,Y,T), action(4,T).    % do nothing
 
 % lakes
-lake_agent_prox(I,T) :- lake(X1,Y1,I), agent(X2,Y2,T), |X1 - X2| + |Y1 - Y2| = 1.
+lake_frog_prox(I,T,W) :- lake(X1,Y1,I), frog(X2,Y2,I,T,W), |X1 - X2| + |Y1 - Y2| == 1.
+lake_agent_prox(I,T) :- lake(X1,Y1,I), agent(X2,Y2,T), |X1 - X2| + |Y1 - Y2| == 1.
 lake_timer(I,C-1,T+1) :- lake_timer(I,C,T), C!=0, T<horizon.
 lake_timer(I,0,T+1) :- lake_timer(I,0,T), T<horizon, not lake_agent_prox(I,T).
 lake_timer(I,lake_respawn,T+1) :- lake_timer(I,0,T), lake_agent_prox(I,T), T<horizon.
@@ -34,9 +35,16 @@ frog(X,Y-1,I,T+1,W) :- frog(X,Y,I,T,W), f_action(3,I,T,W).    % move down
 %%% OPTIMIZATION %%%
 
 norm_violation(W) :- agent(X,Y,T), frog(X,Y,I,T,W).
+%norm_violation(W) :- ctd_world(W), not ctd(W).
+%
+%ctd(W) :- ctd_world(W), ctd(I,D), frog(X,Y,I,T,W), agent(X,Y,T), T < D.
+%ctd_world(W) :- ctd(I,D), frog(X,Y,I,T,W).
 
 #show norm_violation/1.
+%#show ctd/1.
 #defined f_rnd/4.
 #defined act_pos/5.
 #defined lake_order/4.
 #defined lake_action/4.
+#defined ctd/2.
+#defined ctd_world/1.
