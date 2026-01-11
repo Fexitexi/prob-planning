@@ -74,7 +74,8 @@ class ASPTransformer:
                             continue
                         if dist[nx, ny] > dist[x, y] + 1:
                             dist[nx, ny] = dist[x, y] + 1
-                            best[nx, ny] = np.array([-dx, -dy], dtype=np.int8)
+                            if dist[nx, ny] == 1:
+                                best[nx, ny] = np.array([0, 0], dtype=np.int8)
                             q.append((nx, ny))
 
             lake_dist.append(dist)
@@ -111,7 +112,7 @@ class ASPTransformer:
                     dist = lake_dist[i][c, r]
                     step = lake_best_step[i][c, r]
 
-                    action = 4
+                    action = -1
                     if step[0] == 1 and step[1] == 0:
                         action = 0
                     elif step[0] == 0 and step[1] == 1:
@@ -187,7 +188,7 @@ class ASPTransformer:
 
         return "\n".join(lines)
 
-    def build_dynamic_worlds(self, state, num_worlds, horizon, append_lines=True) -> str:
+    def build_dynamic_worlds(self, state, num_worlds, horizon) -> str:
         self._state = state
         lines = []
 
@@ -216,10 +217,8 @@ class ASPTransformer:
             random_world = []
             for f, (c,r) in enumerate(state.frogs):
                 random_frog = []
-                if append_lines: lines.append(f"frog({c}, {r}, {f}, 0, {i}).")
                 for t in range(horizon):
                     ran = random.random()
-                    if append_lines: lines.append(f"f_rnd({f}, {t}, {i}, {int(ran * 100)}).")
                     random_frog.append(ran)
                 random_world.append(random_frog)
             self._rnd.append(random_world)
@@ -296,8 +295,8 @@ class ASPTransformer:
     def call_clingo_generate(self, state, violations):
         lines = []
         dyn = self.build_dynamic(state)
-        for constraint in self._constraints:
-            lines.append(constraint)
+        #for constraint in self._constraints:
+        #    lines.append(constraint)
         if violations:
             # activate worlds here
             for i in violations:
@@ -325,7 +324,11 @@ class ASPTransformer:
                 actions[sym.arguments[1].number] = sym.arguments[0].number
         return actions
 
-    def call_clingo_check(self, state, actions, exclude_worlds):
+    def call_clingo_check(self, state, actions, exclude_worlds, n_rot, rot_count):
+        if rot_count != -1:
+            max_world = rot_count * n_rot
+        else:
+            max_world = len(self._rnd)
         self._latest_model = None
         dyn = self.build_dynamic(state)
         with open("check.lp", "r") as f:
@@ -360,7 +363,7 @@ class ASPTransformer:
                                     lines.append(
                                         f"lake_order({c}, {r}, {lake[0]}, {j}).")
 
-        for i in range(len(self._rnd)):
+        for i in range(max_world):
             if i in exclude_worlds: continue
             for f, (c,r) in enumerate(state.frogs):
                 if f not in self._frogs: continue
@@ -401,11 +404,15 @@ class ASPTransformer:
         self._check.ground([("base", [])], context=self)
         self._check.solve(on_model=self.on_model)
         violations = []
+        rot = True
         #print(self._latest_model)
         for sym in self._latest_model:
             if sym.name == "norm_violation" and len(sym.arguments) == 1:
-                violations.append(sym.arguments[0].number)
-        return violations
+                world = sym.arguments[0].number
+                violations.append(world)
+                if world > max_world - n_rot:
+                    rot = False
+        return violations, rot
 
     def compute_reward_new(self, lawn, lake, dist_lawn, dist_lake):
         lawn = lawn.number

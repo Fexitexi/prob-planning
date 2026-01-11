@@ -52,11 +52,14 @@ pref_grass(X,Y,T,-1) :- grass_order(X,Y,I,_), grass_timer(I,_,T), not any_grass_
 :- agent(X,Y,T), lake(X,Y,I).
 
 % compute frog action w/ sampled lookup table
-f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), act_pos(X,Y,A,O,N'), N = N' - 1, N' > 1, A < AP, R >= O * (30 / N), R < (O + 1) * (30 / N).
-f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), act_pos(X,Y,A,O,N'), N = N' - 1, N' > 1, A = AP, R >= O * (30 / N), R < O * (30 / N) + 70.
-f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), act_pos(X,Y,A,O,N'), N = N' - 1, N' = 1, A = AP.
-f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), act_pos(X,Y,A,O,N'), N = N' - 1, N' > 1, A > AP, R >= 70 + (O - 1) * (30 / N), R < 70 + O * (30 / N).
-f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,-1), act_pos(X,Y,A,O,N), R >= O * (100 / N), R < (O + 1) * (100 / N).
+% todo: what about rounding errors?
+valid_act_pos(X,Y,A,O,N) :- act_pos(X,Y,A,O,N), N > 1.
+f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), valid_act_pos(X,Y,A,O,N), A < AP, R >= O * (30 / (N-1)), R < (O + 1) * (30 / (N-1)).
+f_action(AP,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), valid_act_pos(X,Y,AP,O,N), R >= O * (30 / (N-1)), R < O * (30 / (N-1)) + 70.
+f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), act_pos(X,Y,A,O,1).
+f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), valid_act_pos(X,Y,A,O,N), A > AP, R >= 70 + (O - 1) * (30 / (N-1)), R < 70 + O * (30 / (N-1)).
+f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,-1), valid_act_pos(X,Y,A,O,N), R >= O * (100 / N), R < (O + 1) * (100 / N).
+
 
 % compute frog movement
 frog(X+1,Y,I,T+1,W) :- frog(X,Y,I,T,W), f_action(0,I,T,W).    % move right
@@ -71,7 +74,11 @@ norm_violation(W) :- agent(X,Y,T), frog(X,Y,I,T,W).
 :~ norm_violation(W). [1@ horizon +1]
 
 #maximize {R@ horizon-T : reward(R,T)}.
-#show reward/2.
+#show frog/5.
+#show pref/4.
+#show f_rnd/4.
+#show act_pos/5.
+#show f_action/4.
 #show action/2.
 #defined f_rnd/4.
 #defined wall/2.

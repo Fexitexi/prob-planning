@@ -17,11 +17,12 @@ any_lake_active(T) :- lake_timer(_,0,T).
 has_smaller_active(X,Y,I,T) :- lake_timer(I, 0, T), lake_order(X, Y, I, O), lake_timer(I_Other, 0, T), lake_order(X, Y, I, O_Other),O_Other < O.
 
 % compute frog action w/ sampled lookup table
-f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), act_pos(X,Y,A,O,N'), N = N' - 1, N' > 1, A < AP, R >= O * (30 / N), R < (O + 1) * (30 / N).
-f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), act_pos(X,Y,A,O,N'), N = N' - 1, N' > 1, A = AP, R >= O * (30 / N), R < O * (30 / N) + 70.
-f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), act_pos(X,Y,A,O,N'), N = N' - 1, N' = 1, A = AP.
-f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), act_pos(X,Y,A,O,N'), N = N' - 1, N' > 1, A > AP, R >= 70 + (O - 1) * (30 / N), R < 70 + O * (30 / N).
-f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,-1), act_pos(X,Y,A,O,N), R >= O * (100 / N), R < (O + 1) * (100 / N).
+valid_act_pos(X,Y,A,O,N) :- act_pos(X,Y,A,O,N), N > 1.
+f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), valid_act_pos(X,Y,A,O,N), A < AP, R >= O * (30 / (N-1)), R < (O + 1) * (30 / (N-1)).
+f_action(AP,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), valid_act_pos(X,Y,AP,O,N), R >= O * (30 / (N-1)), R < O * (30 / (N-1)) + 70.
+f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), act_pos(X,Y,A,O,1).
+f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), valid_act_pos(X,Y,A,O,N), A > AP, R >= 70 + (O - 1) * (30 / (N-1)), R < 70 + O * (30 / (N-1)).
+f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,-1), valid_act_pos(X,Y,A,O,N), R >= O * (100 / N), R < (O + 1) * (100 / N).
 
 % compute frog movement
 frog(X+1,Y,I,T+1,W) :- frog(X,Y,I,T,W), f_action(0,I,T,W).    % move right
