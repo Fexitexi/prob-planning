@@ -47,7 +47,6 @@ class ASPTransformer:
 
         self._lake_dict = {}
         self._grass_dict = {}
-        # build the lake dict
 
         lake_dist = []
         grass_dist = []
@@ -140,35 +139,6 @@ class ASPTransformer:
         lines.append("")
         self._horizon = horizon
 
-        # encode possible actions of frogs
-        line = ""
-
-        # moved to dynamic
-        #done = []
-        #for (c_f,r_f) in state.frogs:
-        #    c_min = c_f - horizon
-        #    c_max = c_f + horizon
-        #    r_min = r_f - horizon
-        #    r_max = r_f + horizon
-        #    for c in range(c_min, c_max + 1):
-        #        if 0 <= c < state.size:
-        #            for r in range(r_min, r_max + 1):
-        #                if 0 <= r < state.size:
-        #                    dist = abs(c_f - c) + abs(r_f - r)
-        #                    if (c,r) not in done and dist <= horizon:
-        #                        done.append((c,r))
-        #                        is_wall = np.any(np.all(state.walls == [c, r], axis=1))
-        #                        is_lake = np.any(np.all(state.lakes == [c, r], axis=1))
-        #                        if not is_wall and not is_lake:
-        #                            pos_actions = []
-        #                            # Use the precomputed pos_actions array from state
-        #                            for i in range(4):
-        #                                if state.pos_actions[c, r, i] == 1:
-        #                                    pos_actions.append(i)
-        #                            for i, action in enumerate(pos_actions):
-        #                                line += f"act_pos({c}, {r}, {action}, {i}, {len(pos_actions)})."
-        #lines.append(line)
-
         ## constant atoms: lakes
         line = ""
         for i, (c, r) in enumerate(state.lakes):
@@ -179,11 +149,6 @@ class ASPTransformer:
         for i, (c, r) in enumerate(state.grass):
             line += f"grass({c}, {r}, {i})."
         lines.append(line)
-        ## constant atoms: walls
-        #line = ""
-        #for (c, r) in state.walls:
-        #    line += f"wall({c}, {r})."
-        #lines.append(line)
 
         self._static = "\n".join(lines)
         return "\n".join(lines)
@@ -244,90 +209,6 @@ class ASPTransformer:
                     for i in indices:
                         if i not in self._frogs:
                             self._frogs.append(i)
-
-        #self._dyn_lake_dict = {}
-#
-        #words = ["1"]
-        #final_words = []
-        #for h in range(horizon):
-        #    new_words = []
-        #    for w in words:
-        #        for a in range(5):
-        #            word = f"{w}{a}"
-        #            new_words.append(word)
-        #    words = new_words
-        #    final_words.extend(new_words)
-#
-        #for w in final_words:
-        #    w = w.removeprefix("1")
-        #    copy_state = state.fast_clone()
-        #    valid = True
-        #    for a in w:
-        #        try:
-        #            self._dynamics.move_agent(copy_state, int(a))
-        #        except:
-        #            valid = False
-        #            break
-        #        # todo this should be in dynamics
-        #        for i, (gx, gy) in enumerate(copy_state.grass):
-        #            ax, ay = copy_state.agent
-        #            if ax == gx and ay == gy:
-        #                if copy_state.grass_active[i]:
-        #                    copy_state.grass_active[i] = False
-        #                    copy_state.grass_timer[i] = copy_state.grass_respawn
-        #            else:
-        #                if not copy_state.grass_active[i] and copy_state.grass_timer[
-        #                    i] > 0:
-        #                    copy_state.grass_timer[i] -= 1
-        #                    if copy_state.grass_timer[i] == 0:
-        #                        copy_state.grass_active[i] = True
-#
-        #        # Update lake states based on frog adjacency
-        #        for i, (lx, ly) in enumerate(copy_state.lakes):
-        #            # Decrease timer if running
-        #            if copy_state.lake_timer[i] > 0:
-        #                copy_state.lake_timer[i] -= 1
-        #                if copy_state.lake_timer[i] == 0:
-        #                    copy_state.lakes_full[i] = True  # refill lake
-#
-#
-        #            # Check adjacency to the agent (Manhattan distance 1)
-        #            ax, ay = copy_state.agent
-        #            if copy_state.lakes_full[i] and abs(ax - lx) + abs(
-        #                    ay - ly) == 1:
-        #                # Additional reward for being adjacent (Manhattan distance 1) to any full lake
-        #                copy_state.lakes_full[i] = False
-        #                copy_state.lake_timer[i] = copy_state.lake_respawn
-        #    if valid:
-        #        self._dyn_lake_dict[f"1{w}"] = copy_state.lakes_full
-#
-        #for h in self._dyn_lake_dict:
-        #    full_lakes = self._dyn_lake_dict[h]
-        #    done = []
-        #    for f_i, (c_f,r_f) in enumerate(state.frogs):
-        #        if f_i not in self._frogs: continue
-        #        c_min = c_f - horizon
-        #        c_max = c_f + horizon
-        #        r_min = r_f - horizon
-        #        r_max = r_f + horizon
-        #        for c in range(c_min, c_max + 1):
-        #            for r in range(r_min, r_max + 1):
-        #                dist = abs(c_f - c) + abs(r_f - r)
-        #                if (c,r) not in done and dist < horizon:
-        #                    done.append((c,r))
-        #                    if (c, r) in self._lake_dict:
-        #                        lakes = self._lake_dict[(c, r)]
-        #                        lake = None
-        #                        for i in lakes:
-        #                            if full_lakes[i[0]]:
-        #                                lake = i
-        #                                break
-        #                        if lake is not None:
-        #                            lines.append(
-        #                                f"pref_act({c},{r},{h},{lake[2]}).")
-        #                        else:
-        #                            lines.append(
-        #                                f"pref_act({c},{r},{h},{-1}).")
 
         self._rnd = []
         # frogs
@@ -411,17 +292,6 @@ class ASPTransformer:
         self._dynamic = "\n".join(lines)
         return "\n".join(lines)
 
-    def build_worlds(self, worlds) -> str:
-        lines = []
-
-        for w, world in enumerate(worlds):
-            line = ""
-            for t, state in enumerate(world):
-                for i, (c,r) in enumerate(state.frogs):
-                    line += f"frog({c}, {r}, {i}, {t}, {w})."
-            lines.append(line)
-
-        return "\n".join(lines)
 
     def call_clingo_generate(self, state, violations):
         lines = []
@@ -467,11 +337,8 @@ class ASPTransformer:
         lines = []
         lines.append(f"agent({state.agent[0]}, {state.agent[1]}, 0).")
 
-        h = "1"
         for i, a in enumerate(actions):
             lines.append(f"action({a}, {i}).")
-            h += str(a)
-            #full_lakes = self._dyn_lake_dict[h]
             done = []
             for f_i, (c_f,r_f) in enumerate(state.frogs):
                 if f_i not in self._frogs: continue
@@ -492,17 +359,6 @@ class ASPTransformer:
                                         f"lake_action({c}, {r}, {lake[0]}, {lake[2]}).")
                                     lines.append(
                                         f"lake_order({c}, {r}, {lake[0]}, {j}).")
-                            #if (c, r) in self._lake_dict:
-                            #    lakes = self._lake_dict[(c,r)]
-                            #    lake = None
-                            #    for j in lakes:
-                            #        if full_lakes[j[0]]:
-                            #            lake = j
-                            #            break
-                            #    if lake is not None:
-                            #        lines.append(f"pref_act({c},{r},{i},{lake[2]}).")
-                            #    else:
-                            #        lines.append(f"pref_act({c},{r},{i},{-1}).")
 
         for i in range(len(self._rnd)):
             if i in exclude_worlds: continue
@@ -550,41 +406,6 @@ class ASPTransformer:
             if sym.name == "norm_violation" and len(sym.arguments) == 1:
                 violations.append(sym.arguments[0].number)
         return violations
-
-
-    def call_clingo_new(self, static, dynamic, horizon):
-        self._latest_model = None
-        with open("fixed-logic.lp", "r") as f:
-            fixed_program = f.read()
-        ctl = clingo.Control()
-        ctl.add("base", [], f"{static}\n{dynamic}\n{fixed_program}")
-        ctl.ground([("base", [])], context=self)
-        ctl.solve(on_model=self.on_model)
-        actions = [-1] * horizon
-        for sym in self._latest_model:
-            if sym.name == "action" and len(sym.arguments) == 2:
-                actions[sym.arguments[1].number] = sym.arguments[0].number
-        return actions
-
-    def call_clingo(self, static, dynamic, worlds, horizon):
-        start_time = time.time()
-        self._latest_model = None
-        with open("fixed.lp", "r") as f:
-            fixed_program = f.read()
-        ctl = clingo.Control()
-
-        ctl.add("base", [], f"{static}\n{dynamic}\n{worlds}\n{fixed_program}")
-        ctl.ground([("base", [])], context=self)
-        ctl.solve(on_model=self.on_model)
-        actions = [-1] * horizon
-        for sym in self._latest_model:
-            if sym.name == "action" and len(sym.arguments) == 2:
-                actions[sym.arguments[1].number] = sym.arguments[0].number
-        #print(f"First action: {first_action}")
-
-        elapsed = time.time() - start_time
-        #print(f"clingo took {elapsed:.6f} seconds")
-        return actions
 
     def compute_reward_new(self, lawn, lake, dist_lawn, dist_lake):
         lawn = lawn.number
