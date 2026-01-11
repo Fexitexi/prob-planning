@@ -6,13 +6,8 @@ agent(X-1,Y,T+1) :- agent(X,Y,T), action(2,T).    % move left
 agent(X,Y-1,T+1) :- agent(X,Y,T), action(3,T).    % move down
 agent(X,Y,T+1) :- agent(X,Y,T), action(4,T).    % do nothing
 
-% movement history
-history(H,0) :- action(A,0), H = 10 + A.
-history(H,T) :- history(H',T-1), action(A,T), H = H' * 10 + A.
-
 % compute reward
-action_reward(@compute_reward(H), T) :- history(H, T).
-reward(@compute_reward_new(LAWN,LAKE),T) :- sips_lake(LAKE,T), mows_lawn(LAWN,T), T>0.
+reward(@compute_reward_new(LAWN,LAKE,D_LAWN,D_LAKE),T) :- sips_lake(LAKE,T), mows_lawn(LAWN,T), dist_grass(D_LAWN,T), dist_lake(D_LAKE,T), T>0.
 
 % q-learning features
 sips_lake(1,T) :- lake_timer(I,lake_respawn,T).
@@ -21,7 +16,8 @@ mows_lawn(1,T) :- grass_timer(I,grass_respawn,T).
 mows_lawn(0,T) :- grass_timer(_,_,T), not mows_lawn(1,T).
 dist_lake(D,T) :- agent(X,Y,T), pref_lake(X,Y,T,I), lake_dist(X,Y,D,I).
 dist_lake(0,T) :- agent(X,Y,T), pref_lake(X,Y,T,-1).
-%todo dist lawn
+dist_grass(D,T) :- agent(X,Y,T), pref_grass(X,Y,T,I), grass_dist(X,Y,D,I).
+dist_grass(0,T) :- agent(X,Y,T), pref_grass(X,Y,T,-1).
 
 % lakes
 lake_agent_prox(I,T) :- lake(X1,Y1,I), agent(X2,Y2,T), |X1 - X2| + |Y1 - Y2| = 1.
@@ -40,6 +36,10 @@ pref_lake(X,Y,T,I) :- lake_order(X,Y,I,O), lake_timer(I,0,T), not has_smaller_ac
 pref_lake(X,Y,T,-1) :- lake_order(X,Y,I,_), lake_timer(I,_,T), not any_lake_active(T).
 any_lake_active(T) :- lake_timer(_,0,T).
 has_smaller_active(X,Y,I,T) :- lake_timer(I, 0, T), lake_order(X, Y, I, O), lake_timer(I_Other, 0, T), lake_order(X, Y, I_Other, O_Other),O_Other < O.
+has_smaller_grass(X,Y,I,T) :- grass_timer(I, 0, T), grass_order(X, Y, I, O), grass_timer(I_Other, 0, T), grass_order(X, Y, I_Other, O_Other),O_Other < O.
+any_grass_active(T) :- grass_timer(_,0,T).
+pref_grass(X,Y,T,I) :- grass_order(X,Y,I,O), grass_timer(I,0,T), not has_smaller_grass(X,Y,I,T).
+pref_grass(X,Y,T,-1) :- grass_order(X,Y,I,_), grass_timer(I,_,T), not any_grass_active(T).
 
 % can't leave the grid
 :- agent(X,Y,T), X < 0.
@@ -70,8 +70,7 @@ frog(X,Y-1,I,T+1,W) :- frog(X,Y,I,T,W), f_action(3,I,T,W).    % move down
 norm_violation(W) :- agent(X,Y,T), frog(X,Y,I,T,W).
 :~ norm_violation(W). [1@ horizon +1]
 
-#maximize {R@ horizon-T : action_reward(R,T)}.
-#show dist_lake/2.
+#maximize {R@ horizon-T : reward(R,T)}.
 #show reward/2.
 #show action/2.
 #defined f_rnd/4.

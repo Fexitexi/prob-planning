@@ -22,6 +22,7 @@ class ASPTransformer:
         self._latest_model = None
         self._rnd = None
         self._lake_dict = None
+        self._grass_dict = None
         self._dyn_lake_dict = None
         self._constraints = []
         self._check = None
@@ -45,9 +46,11 @@ class ASPTransformer:
         lines = []
 
         self._lake_dict = {}
+        self._grass_dict = {}
         # build the lake dict
 
         lake_dist = []
+        grass_dist = []
         lake_best_step = []
         walls_set = {tuple(w) for w in state.walls}
         lakes_set = {tuple(w) for w in state.lakes}
@@ -78,11 +81,33 @@ class ASPTransformer:
             lake_dist.append(dist)
             lake_best_step.append(best)
 
+        for (lx, ly) in state.grass:
+            dist = np.full((state.size, state.size), np.iinfo(np.int32).max,
+                           dtype=np.int32)
+
+            q = deque()
+            q.append((lx, ly))
+            dist[lx, ly] = 0
+
+            while q:
+                x, y = q.popleft()
+                for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < state.size and 0 <= ny < state.size:
+                        if (nx, ny) in walls_set or (nx, ny) in lakes_set:
+                            continue
+                        if dist[nx, ny] > dist[x, y] + 1:
+                            dist[nx, ny] = dist[x, y] + 1
+                            q.append((nx, ny))
+
+            grass_dist.append(dist)
+
         for c in range(state.size):
             for r in range(state.size):
                 if (c, r) in walls_set or (c, r) in lakes_set:
                     continue
                 lakes_info = []
+                grass_info = []
                 for i in range(len(state.lakes)):
                     dist = lake_dist[i][c, r]
                     step = lake_best_step[i][c, r]
@@ -98,9 +123,14 @@ class ASPTransformer:
                         action = 3
 
                     lakes_info.append((i, dist, action))
+                for i in range(len(state.grass)):
+                    dist = grass_dist[i][c, r]
+                    grass_info.append((i, dist))
 
+                grass_info.sort(key=lambda x: x[1])
                 lakes_info.sort(key=lambda x: x[1])
                 self._lake_dict[(c, r)] = lakes_info
+                self._grass_dict[(c, r)] = grass_info
 
         # constants
         lines.append(f"#const size={state.size}.")
@@ -362,6 +392,12 @@ class ASPTransformer:
                                 f"lake_order({c}, {r}, {lake[0]}, {i}).")
                             lines.append(
                                 f"lake_dist({c}, {r}, {lake[1]}, {lake[0]}).")
+                    if (c, r) in self._grass_dict:
+                        for i, grass in enumerate(self._grass_dict[(c, r)]):
+                            lines.append(
+                                f"grass_order({c}, {r}, {grass[0]}, {i}).")
+                            lines.append(
+                                f"grass_dist({c}, {r}, {grass[1]}, {grass[0]}).")
                     is_wall = np.any(
                         np.all(state.walls == [c, r], axis=1))
                     is_lake = np.any(
@@ -550,38 +586,25 @@ class ASPTransformer:
         #print(f"clingo took {elapsed:.6f} seconds")
         return actions
 
-    def compute_reward_new(self, lawn, lake):
+    def compute_reward_new(self, lawn, lake, dist_lawn, dist_lake):
         lawn = lawn.number
         lake = lake.number
-
-
-        return clingo.Number(0)
-
-
-    def compute_reward(self, h):
-        actions = []
-        history = h.number
-        while history > 0:
-            actions.append(history % 10)
-            history //= 10
-        state = self._state.fast_clone()
-        actions.pop()
-        success = True
-        while len(actions) > 1:
-            action = actions.pop()
-            try:
-                self._dynamics.move_agent(state, action)
-            except:
-                success = False
-                break
-        if success:
-            try:
-                value = self._q_agent.getQValue(state, actions[0])
-                return clingo.Number(int(value * 10000))
-            except:
-                return clingo.Number(0)
+        dist_lawn = dist_lawn.number
+        dist_lake = dist_lake.number
+        if dist_lake < 5 and dist_lake != 0:
+            dist_lake = 1 - (dist_lake / 5)
         else:
-            return clingo.Number(0)
+            dist_lake = 0
+        dist_lawn = 1 - (dist_lawn / (self._state.size * self._state.size))
+        features = {
+            "mows_lawn": lawn,
+            "sips_lake": lake,
+            "dist_lawn": dist_lawn,
+            "dist_lake": dist_lake,
+        }
+        q_value = self._q_agent.getQValueFromFeatures(features)
+        return clingo.Number(int(q_value * 10000))
+
 
     def on_model(self, m):
         self._latest_model = m.symbols(shown=True)
