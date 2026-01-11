@@ -240,6 +240,8 @@ class ASPTransformer:
                                 # here new code
                                 if (c, r) in self._lake_dict:
                                     for i, lake in enumerate(self._lake_dict[(c, r)]):
+                                        #todo make this dynamic
+                                        if i > 10: continue
                                         lines.append(f"lake_action({c}, {r}, {lake[0]}, {lake[2]}).")
                                         lines.append(f"lake_order({c}, {r}, {lake[0]}, {i}).")
                                 is_wall = np.any(
@@ -266,6 +268,8 @@ class ASPTransformer:
                 if dist <= horizon:
                     if (c, r) in self._lake_dict:
                         for i, lake in enumerate(self._lake_dict[(c, r)]):
+                            #todo make this dynamic
+                            if i > 10: continue
                             lines.append(
                                 f"lake_action({c}, {r}, {lake[0]}, {lake[2]}).")
                             lines.append(
@@ -274,6 +278,8 @@ class ASPTransformer:
                                 f"lake_dist({c}, {r}, {lake[1]}, {lake[0]}).")
                     if (c, r) in self._grass_dict:
                         for i, grass in enumerate(self._grass_dict[(c, r)]):
+                            # todo make this dynamic
+                            if i > 10: continue
                             lines.append(
                                 f"grass_order({c}, {r}, {grass[0]}, {i}).")
                             lines.append(
