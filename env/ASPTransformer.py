@@ -186,6 +186,12 @@ class ASPTransformer:
             line += f"grass_timer({i}, {c}, 0)."
         lines.append(line)
 
+
+        # frog timer
+        for f in range(len(state.frog_timer)):
+            if state.frog_timer[f] > 0:
+                lines.append(f"frog_timer({f}, {state.frog_timer[f]}, 0).")
+
         return "\n".join(lines)
 
     def build_dynamic_worlds(self, state, num_worlds, horizon, sips) -> str:
@@ -196,7 +202,7 @@ class ASPTransformer:
         lines.append(f"agent({state.agent[0]}, {state.agent[1]}, 0).")
 
         for s in sips:
-            lines.append(f"ctd({sips[s][0]}, {sips[s][1]}).")
+            lines.append(f"ctd({sips[s][0]}, {sips[s][1]}, 0).")
 
         # check the frogs in the "sphere" of the agent
         # agent window
@@ -350,7 +356,7 @@ class ASPTransformer:
         lines.append(f"agent({state.agent[0]}, {state.agent[1]}, 0).")
 
         for s in sips:
-            lines.append(f"ctd({sips[s][0]}, {sips[s][1]}).")
+            lines.append(f"ctd({sips[s][0]}, {sips[s][1]}, 0).")
 
         for i, a in enumerate(actions):
             lines.append(f"action({a}, {i}).")

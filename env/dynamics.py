@@ -45,7 +45,7 @@ class GardenerDynamics:
 
         for i in range(len(frogs)):
             fx, fy = frogs[i]
-            if state.dead_frogs[i]:
+            if state.dead_frogs[i] or state.frog_timer[i] > 0:
                 new_positions.append([fx, fy])
                 continue
             pos_tuple = (int(fx), int(fy))

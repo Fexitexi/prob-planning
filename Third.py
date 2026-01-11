@@ -36,9 +36,9 @@ if __name__ == "__main__":
 
     # test the new loop
     seed = random.randint(0, 1000000)
-    # saved seeds: 788618, 784741, 692529
-    print(f"Seed: {692529}")
-    obs, info = env.reset(seed=692529)
+    # saved seeds: 788618, 784741, 692529, 723724
+    print(f"Seed: {seed}")
+    obs, info = env.reset(seed=seed)
     done = False
 
     state = ObservationState.from_obs(obs)
@@ -132,9 +132,11 @@ if __name__ == "__main__":
         remove = []
         for s in sips:
             sips[s][1] -= 1
-            if sips[s][1] == 0:
+            if state.agent[0] == state.frogs[sips[s][0]][0] and state.agent[1] == state.frogs[sips[s][0]][1]:
                 remove.append(s)
-            elif state.agent[0] == state.frogs[sips[s][0]][0] and state.agent[1] == state.frogs[sips[s][0]][1]:
+                msg = "CDT SUCCESS!"
+                print(f"\033[31m{msg}\033[0m")
+            elif sips[s][1] == 0:
                 remove.append(s)
         for r in remove:
             sips.pop(r)
@@ -142,9 +144,9 @@ if __name__ == "__main__":
         for lake in range(len(lake_full)):
             if lake_full[lake] and not new_lake_full[lake]:
                 for i,(c,r) in enumerate(state.frogs):
-                    if abs(state.lakes[lake][0] - c) + abs(state.lakes[lake][1] - r) == 1:
+                    if abs(state.lakes[lake][0] - c) + abs(state.lakes[lake][1] - r) == 1 and not state.dead_frogs[i]:
                         print(f"Frog {i} is at lake {lake}")
-                        sips[lake] = [i, 4]
+                        sips[lake] = [i, 4, c, r]
         lake_full = new_lake_full.copy()
 
 

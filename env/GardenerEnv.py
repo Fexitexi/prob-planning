@@ -32,6 +32,7 @@ class GardenerEnv(gym.Env):
         self._state.lakes_full = np.ones(num_lakes, dtype=bool)
         self._state.dead_frogs = np.zeros(num_frogs, dtype=bool)
         self._state.lake_timer = np.zeros(num_lakes, dtype=int)
+        self._state.frog_timer = np.zeros(num_frogs, dtype=int)
         self._state.grass = np.full((num_grass, 2), -1, dtype=int)
         # Each grass patch starts active. A timer is used for reactivation.
         self._state.grass_active = np.ones(num_grass, dtype=bool)
@@ -58,6 +59,7 @@ class GardenerEnv(gym.Env):
              "dead_frogs": gym.spaces.Box(0, 1, shape=(num_frogs,),
                                           dtype=bool),
              "lake_timer": gym.spaces.Box(0, lake_respawn, shape=(num_lakes,), dtype=int),
+             "frog_timer": gym.spaces.Box(0, 5, shape=(num_frogs,), dtype=int),
              "grass": gym.spaces.Box(0, size - 1, shape=(num_grass, 2),
                                      dtype=int),
              "grass_active": gym.spaces.Box(0, 1, shape=(num_grass,), dtype=bool),
@@ -88,6 +90,7 @@ class GardenerEnv(gym.Env):
                 "lakes_full": self._state.lakes_full,
                 "dead_frogs": self._state.dead_frogs,
                 "lake_timer": self._state.lake_timer,
+                "frog_timer": self._state.frog_timer,
                 "grass": self._state.grass,
                 "grass_active": self._state.grass_active,
                 "grass_timer": self._state.grass_timer,
@@ -321,6 +324,7 @@ class GardenerEnv(gym.Env):
         # np_random.choice returns a 1D array if input is 1D, so convert to
         # 2D array of positions
         self._state.lake_timer = np.ones(len(self._state.lakes), dtype=int)
+        self._state.frog_timer = np.zeros(len(self._state.frogs), dtype=int)
         self._state.grass_active[:] = True
         self._state.grass_timer[:] = 0
 
@@ -419,9 +423,10 @@ class GardenerEnv(gym.Env):
 
         self._dynamics.move_frogs(self._state)
 
-        print(self._state.dead_frogs)
+
         if np.any(np.all(self._state.agent == self._state.frogs, axis=1)):
             for i,(c,r) in enumerate(self._state.frogs):
+                if self._state.dead_frogs[i]: continue
                 if self._state.agent[0] == c and self._state.agent[1] == r:
                     self._state.dead_frogs[i] = True
                     msg = "FROG KILLED!"
@@ -445,6 +450,9 @@ class GardenerEnv(gym.Env):
         return observation, reward, terminated, truncated, info
 
     def update_env(self, state, reward: int) -> int:
+        for f, (c, r) in enumerate(state.frogs):
+            if state.frog_timer[f] > 0:
+                state.frog_timer[f] = state.frog_timer[f] - 1
         # Update grass states
         for i, (gx, gy) in enumerate(state.grass):
             ax, ay = state.agent
@@ -482,6 +490,9 @@ class GardenerEnv(gym.Env):
                 reward += 5
                 state.lakes_full[i] = False
                 state.lake_timer[i] = state.lake_respawn
+                for f,(c,r) in enumerate(state.frogs):
+                    if abs(c - lx) + abs(r - ly) == 1:
+                        state.frog_timer[f] = 5
         return reward
 
     def render(self):

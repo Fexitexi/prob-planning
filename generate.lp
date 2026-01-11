@@ -54,13 +54,16 @@ pref_grass(X,Y,T,-1) :- grass_order(X,Y,I,_), grass_timer(I,_,T), not any_grass_
 
 % compute frog action w/ sampled lookup table
 % todo: what about rounding errors?
+frog_timer(I,D,0,W) :- frog(X,Y,I,0,W), frog_timer(I,D,0).
+frog_timer(I,D-1,T+1,W) :- frog_timer(I,D,T,W), D > 0.
+any_frog_timer(I,T,W) :- frog_timer(I,D,T,W).
 valid_act_pos(X,Y,A,O,N) :- act_pos(X,Y,A,O,N), N > 1.
-f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), valid_act_pos(X,Y,A,O,N), A < AP, R >= O * (30 / (N-1)), R < (O + 1) * (30 / (N-1)).
-f_action(AP,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), valid_act_pos(X,Y,AP,O,N), R >= O * (30 / (N-1)), R < O * (30 / (N-1)) + 70.
-f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), act_pos(X,Y,A,O,1).
-f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), valid_act_pos(X,Y,A,O,N), A > AP, R >= 70 + (O - 1) * (30 / (N-1)), R < 70 + O * (30 / (N-1)).
-f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,-1), valid_act_pos(X,Y,A,O,N), R >= O * (100 / N), R < (O + 1) * (100 / N).
-
+f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), valid_act_pos(X,Y,A,O,N), not any_frog_timer(I,T,W), A < AP, R >= O * (30 / (N-1)), R < (O + 1) * (30 / (N-1)).
+f_action(AP,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), valid_act_pos(X,Y,AP,O,N), not any_frog_timer(I,T,W), R >= O * (30 / (N-1)), R < O * (30 / (N-1)) + 70.
+f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), act_pos(X,Y,A,O,1), not any_frog_timer(I,T,W).
+f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), valid_act_pos(X,Y,A,O,N), not any_frog_timer(I,T,W), A > AP, R >= 70 + (O - 1) * (30 / (N-1)), R < 70 + O * (30 / (N-1)).
+f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,-1), valid_act_pos(X,Y,A,O,N), not any_frog_timer(I,T,W), R >= O * (100 / N), R < (O + 1) * (100 / N).
+frog(X,Y,I,T+1,W) :- frog(X,Y,I,T,W), any_frog_timer(I,T,W).
 
 % compute frog movement
 frog(X+1,Y,I,T+1,W) :- frog(X,Y,I,T,W), f_action(0,I,T,W).    % move right
@@ -71,20 +74,23 @@ frog(X,Y-1,I,T+1,W) :- frog(X,Y,I,T,W), f_action(3,I,T,W).    % move down
 %%% OPTIMIZATION %%%
 
 % try not to step onto frogs
-norm_violation(W) :- agent(X,Y,T), frog(X,Y,I,T,W).
 :~ norm_violation(W). [1@ horizon +1]
 
 
 %%% contrary-to-duty
-%norm_violation(W) :- ctd_world(W), not ctd(W).
-%
-%ctd(W) :- ctd_world(W), ctd(I,D), frog(X,Y,I,T,W), agent(X,Y,T), T < D.
-%ctd_world(W) :- ctd(I,D), frog(X,Y,I,T,W).
+norm_violation(W) :- agent(X,Y,T), frog(X,Y,I,T,W), not ctd(I,_,0,W).
+norm_violation(W) :- ctd(I,D,0,W), not ctd_check(W).
+
+ctd_check(W) :- agent(X,Y,T), frog(X,Y,I,T,W), ctd(I,D,T,W).
+
+ctd(I,D-1,T+1,W) :- ctd(I,D,T,W), D > 0.
+ctd(I,D,0,W) :- frog(X,Y,I,T,W), ctd(I,D,0).
 
 
 
 #maximize {R@ horizon-T : reward(R,T)}.
 #show action/2.
+#show frog_timer/4.
 %#show ctd/1.
 #defined f_rnd/4.
 #defined wall/2.
@@ -92,5 +98,7 @@ norm_violation(W) :- agent(X,Y,T), frog(X,Y,I,T,W).
 #defined act_pos/5.
 #defined lake_order/4.
 #defined lake_action/4.
-#defined ctd/2.
+#defined frog_timer/3.
+#defined ctd/3.
+#defined ctd/1.
 #defined ctd_world/1.

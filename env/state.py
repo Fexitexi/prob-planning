@@ -13,6 +13,7 @@ class GardenerState:
     lake_best_step: list
     lake_dict: dict
     lake_timer: np.ndarray
+    frog_timer: np.ndarray
     grass: np.ndarray
     grass_dist: list
     grass_active: np.ndarray
@@ -43,6 +44,7 @@ class GardenerState:
         new.lakes_full = self.lakes_full.copy()
         new.lake_dict = self.lake_dict # read-only
         new.lake_timer = self.lake_timer.copy()
+        new.frog_timer = self.frog_timer.copy()
         new.grass_dist = self.grass_dist # read-only
         return new
 
@@ -54,6 +56,7 @@ class ObservationState:
     lakes_full: np.ndarray
     dead_frogs: np.ndarray
     lake_timer: np.ndarray
+    frog_timer: np.ndarray
     grass: np.ndarray
     grass_active: np.ndarray
     grass_timer: np.ndarray
@@ -74,6 +77,7 @@ class ObservationState:
             lakes_full=obs["lakes_full"],
             dead_frogs=obs["dead_frogs"],
             lake_timer=obs["lake_timer"],
+            frog_timer=obs["frog_timer"],
             grass=obs["grass"],
             grass_active=obs["grass_active"],
             grass_timer=obs["grass_timer"],
@@ -94,6 +98,7 @@ class ObservationState:
             lakes_full=self.lakes_full.copy(),
             dead_frogs=self.dead_frogs.copy(),
             lake_timer=self.lake_timer.copy(),
+            frog_timer=self.frog_timer.copy(),
             grass=self.grass.copy(),
             grass_active=self.grass_active.copy(),
             grass_timer=self.grass_timer.copy(),
