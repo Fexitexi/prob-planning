@@ -333,7 +333,7 @@ class ASPTransformer:
         self._generate.solve(on_model=self.on_model)
         actions = [-1] * self._horizon
         #todo what if latest model is none
-        print(self._latest_model)
+        #print(self._latest_model)
         for sym in self._latest_model:
             if sym.name == "action" and len(sym.arguments) == 2:
                 actions[sym.arguments[1].number] = sym.arguments[0].number
@@ -376,6 +376,8 @@ class ASPTransformer:
                             if (c, r) in self._lake_dict:
                                 for j, lake in enumerate(
                                         self._lake_dict[(c, r)]):
+                                    #todo make this dynamic
+                                    if j > 10: continue
                                     lines.append(
                                         f"lake_action({c}, {r}, {lake[0]}, {lake[2]}).")
                                     lines.append(
