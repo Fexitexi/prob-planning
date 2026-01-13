@@ -202,7 +202,7 @@ class ASPTransformer:
         lines.append(f"agent({state.agent[0]}, {state.agent[1]}, 0).")
 
         for s in sips:
-            lines.append(f"ctd({sips[s][0]}, {sips[s][1]}, 0).")
+            lines.append(f"ctd({sips[s][0]}, {sips[s][1]}).")
 
         # check the frogs in the "sphere" of the agent
         # agent window
@@ -327,8 +327,10 @@ class ASPTransformer:
         self._latest_model = None
         with open("generate.lp", "r") as f:
             program = f.read()
+        with open("norms.lp", "r") as f:
+            norms = f.read()
         self._generate = clingo.Control()
-        self._generate.add("base", [], f"{self._static}\n{self._dynamic}\n{program}\n{worlds}\n{dyn}")
+        self._generate.add("base", [], f"{self._static}\n{self._dynamic}\n{program}\n{worlds}\n{dyn}\n{norms}")
         self._generate.ground([("base", [])], context=self)
         self._generate.solve(on_model=self.on_model)
         actions = [-1] * self._horizon
@@ -348,15 +350,17 @@ class ASPTransformer:
         dyn = self.build_dynamic(state)
         with open("check.lp", "r") as f:
             program = f.read()
+        with open("norms.lp", "r") as f:
+            norms = f.read()
         self._check = clingo.Control()
-        self._check.add("base", [], f"{self._static}\n{program}\n{dyn}")
+        self._check.add("base", [], f"{self._static}\n{program}\n{dyn}\n{norms}")
 
         # add frogs and agent
         lines = []
         lines.append(f"agent({state.agent[0]}, {state.agent[1]}, 0).")
 
         for s in sips:
-            lines.append(f"ctd({sips[s][0]}, {sips[s][1]}, 0).")
+            lines.append(f"ctd({sips[s][0]}, {sips[s][1]}).")
 
         for i, a in enumerate(actions):
             lines.append(f"action({a}, {i}).")

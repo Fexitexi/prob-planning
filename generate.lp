@@ -54,9 +54,6 @@ pref_grass(X,Y,T,-1) :- grass_order(X,Y,I,_), grass_timer(I,_,T), not any_grass_
 
 % compute frog action w/ sampled lookup table
 % todo: what about rounding errors?
-frog_timer(I,D,0,W) :- frog(X,Y,I,0,W), frog_timer(I,D,0).
-frog_timer(I,D-1,T+1,W) :- frog_timer(I,D,T,W), D > 0.
-any_frog_timer(I,T,W) :- frog_timer(I,D,T,W).
 valid_act_pos(X,Y,A,O,N) :- act_pos(X,Y,A,O,N), N > 1.
 f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), valid_act_pos(X,Y,A,O,N), not any_frog_timer(I,T,W), A < AP, R >= O * (30 / (N-1)), R < (O + 1) * (30 / (N-1)).
 f_action(AP,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), valid_act_pos(X,Y,AP,O,N), not any_frog_timer(I,T,W), R >= O * (30 / (N-1)), R < O * (30 / (N-1)) + 70.
@@ -79,25 +76,11 @@ frog(X,Y-1,I,T+1,W) :- frog(X,Y,I,T,W), f_action(3,I,T,W).    % move down
 
 %%% contrary-to-duty
 
-ctd(I,D-1,T+1,W) :- ctd(I,D,T,W), D > 0.
-ctd(I,T,W) :- ctd(I,D,T,W).
-ctd(I,D,0,W) :- frog(X,Y,I,T,W), ctd(I,D,0).
-
-
 % try not to step onto frogs
 :~ norm_violation(W). [1@ horizon +1,W]
 
-%%% contrary-to-duty
-norm_violation(W) :- frog_capture(I,T,W), not ctd(I,T,W).
-norm_violation(W) :- ctd(I,T,W), not ctd_check(W).
-norm_violation(W) :- sips_lake(I,T), lake_frog_prox(I,T,W), not frog_capture(I,T+1,W), not frog_capture(I,T+2,W), not frog_capture(I,T+3,W), not frog_capture(I,T+3,W).
-
-frog_capture(I,T,W) :- agent(X,Y,T), frog(X,Y,I,T,W).
-ctd_check(W) :- frog_capture(I,T,W), ctd(I,T,W).
-
 #maximize {R@ horizon-T : reward(R,T)}.
 #show action/2.
-#show frog_timer/4.
 %#show ctd/1.
 #defined f_rnd/4.
 #defined wall/2.
