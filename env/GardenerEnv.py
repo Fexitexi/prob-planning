@@ -20,7 +20,7 @@ class GardenerEnv(gym.Env):
         self._state.size = size
         self._state.grass_respawn = grass_respawn
         self._state.lake_respawn = lake_respawn
-        num_frogs = max(1, int(size * size * 0.03))
+        num_frogs = max(1, int(size * size * 0.01))
         num_lakes = max(1, int(size * size * 0.02))
         num_grass = max(1, int(size * size * 0.04))
         num_walls = int(size * size * 0.20)
@@ -31,6 +31,7 @@ class GardenerEnv(gym.Env):
         self._state.lakes = np.full((num_lakes, 2), -1, dtype=int)
         self._state.lakes_full = np.ones(num_lakes, dtype=bool)
         self._state.dead_frogs = np.zeros(num_frogs, dtype=bool)
+        self._state.capt_frogs = np.zeros(num_frogs, dtype=bool)
         self._state.lake_timer = np.zeros(num_lakes, dtype=int)
         self._state.frog_timer = np.zeros(num_frogs, dtype=int)
         self._state.grass = np.full((num_grass, 2), -1, dtype=int)
@@ -57,6 +58,8 @@ class GardenerEnv(gym.Env):
              "lakes_full": gym.spaces.Box(0, 1, shape=(num_lakes,),
                                           dtype=bool),
              "dead_frogs": gym.spaces.Box(0, 1, shape=(num_frogs,),
+                                          dtype=bool),
+             "capt_frogs": gym.spaces.Box(0, 1, shape=(num_frogs,),
                                           dtype=bool),
              "lake_timer": gym.spaces.Box(0, lake_respawn, shape=(num_lakes,), dtype=int),
              "frog_timer": gym.spaces.Box(0, 5, shape=(num_frogs,), dtype=int),
@@ -89,6 +92,7 @@ class GardenerEnv(gym.Env):
                 "lakes": self._state.lakes,
                 "lakes_full": self._state.lakes_full,
                 "dead_frogs": self._state.dead_frogs,
+                "capt_frogs": self._state.capt_frogs,
                 "lake_timer": self._state.lake_timer,
                 "frog_timer": self._state.frog_timer,
                 "grass": self._state.grass,

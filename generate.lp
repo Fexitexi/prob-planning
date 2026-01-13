@@ -78,15 +78,22 @@ frog(X,Y-1,I,T+1,W) :- frog(X,Y,I,T,W), f_action(3,I,T,W).    % move down
 
 
 %%% contrary-to-duty
-norm_violation(W) :- agent(X,Y,T), frog(X,Y,I,T,W), not ctd(I,_,0,W).
-norm_violation(W) :- ctd(I,D,0,W), not ctd_check(W).
-
-ctd_check(W) :- agent(X,Y,T), frog(X,Y,I,T,W), ctd(I,D,T,W).
 
 ctd(I,D-1,T+1,W) :- ctd(I,D,T,W), D > 0.
+ctd(I,T,W) :- ctd(I,D,T,W).
 ctd(I,D,0,W) :- frog(X,Y,I,T,W), ctd(I,D,0).
 
 
+% try not to step onto frogs
+:~ norm_violation(W). [1@ horizon +1,W]
+
+%%% contrary-to-duty
+norm_violation(W) :- frog_capture(I,T,W), not ctd(I,T,W).
+norm_violation(W) :- ctd(I,T,W), not ctd_check(W).
+norm_violation(W) :- sips_lake(I,T), lake_frog_prox(I,T,W), not frog_capture(I,T+1,W), not frog_capture(I,T+2,W), not frog_capture(I,T+3,W), not frog_capture(I,T+3,W).
+
+frog_capture(I,T,W) :- agent(X,Y,T), frog(X,Y,I,T,W).
+ctd_check(W) :- frog_capture(I,T,W), ctd(I,T,W).
 
 #maximize {R@ horizon-T : reward(R,T)}.
 #show action/2.
@@ -102,3 +109,4 @@ ctd(I,D,0,W) :- frog(X,Y,I,T,W), ctd(I,D,0).
 #defined ctd/3.
 #defined ctd/1.
 #defined ctd_world/1.
+#defined sips_lake/2.

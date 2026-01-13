@@ -26,6 +26,10 @@ class GardenerQAgent:
         weights = self._weights
         return sum([features[key] * weights[key] for key in features])
 
+    def getQValueFromFeatures(self, features):
+        weights = self._weights
+        return sum([features[key] * weights[key] for key in features])
+
     def getValue(self, state):
         """
           Returns max_action Q(state,action)
@@ -85,7 +89,7 @@ class GardenerQAgent:
         bestActions = list(
             filter(lambda x: x[1] == maxValue, actionValuePairs))
         #print(f"Best actions: {bestActions}, value: {maxValue}")
-        return random.choice(bestActions)[0]
+        return bestActions[0][0]
 
     def getBestActions(self, state):
         actionValuePairs = [(action, self.getQValue(state, action))

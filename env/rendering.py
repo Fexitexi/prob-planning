@@ -35,8 +35,11 @@ class GardenerRenderer:
                                          self.cell_size))
 
         # Draw frogs
-        for fx, fy in state.frogs:
-            pygame.draw.rect(self.screen, (0, 255, 0),
+        for i, (fx, fy) in enumerate(state.frogs):
+            color = (0, 255, 0)
+            if state.capt_frogs[i]: color = (255, 255, 0)
+            elif state.dead_frogs[i]: color = (255, 0, 0)
+            pygame.draw.rect(self.screen, color,
                              pygame.Rect(fx * self.cell_size,
                                          fy * self.cell_size, self.cell_size,
                                          self.cell_size))

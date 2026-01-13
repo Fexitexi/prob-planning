@@ -20,12 +20,12 @@ if __name__ == "__main__":
     gar = env.unwrapped
 
     # parameter
-    actions = 5
+    n_actions = 5
     horizon = 5
     n_rot = 60
     epsilon = 0.05
     delta = 0.05
-    n_asp = math.ceil((1/(2 * math.pow(epsilon, 2))) * math.log((2*math.pow(actions, horizon))/delta))
+    n_asp = math.ceil((1/(2 * math.pow(epsilon, 2))) * math.log((2*math.pow(n_actions, horizon))/delta))
     print(f"Number of asp: {n_asp}")
 #
     # load the pre-trained weights
@@ -36,9 +36,9 @@ if __name__ == "__main__":
 
     # test the new loop
     seed = random.randint(0, 1000000)
-    # saved seeds: 788618, 784741, 692529, 723724
-    print(f"Seed: {seed}")
-    obs, info = env.reset(seed=seed)
+    # saved seeds: 788618, 784741, 692529, 723724, 155116, 352561
+    print(f"Seed: {155116}")
+    obs, info = env.reset(seed=155116)
     done = False
 
     state = ObservationState.from_obs(obs)
@@ -53,6 +53,7 @@ if __name__ == "__main__":
     check_count = 0
     fixing_count = 0
     sips = {}
+    intervention_count = 0
     while not done:
         step += 1
         rot_count = 1
@@ -89,6 +90,7 @@ if __name__ == "__main__":
 
             fixing_start_time = start_time
             fixing_count+=1
+            intervention_count+=1
             while True:
                 print(rot_count)
                 start_time = time.time()
@@ -128,13 +130,14 @@ if __name__ == "__main__":
         obs, reward, terminated, truncated, info = env.step(action)
         state = ObservationState.from_obs(obs)
 
-        # test
+        # add this to the environment
         remove = []
         for s in sips:
             sips[s][1] -= 1
             if state.agent[0] == state.frogs[sips[s][0]][0] and state.agent[1] == state.frogs[sips[s][0]][1]:
                 remove.append(s)
                 msg = "CDT SUCCESS!"
+                gar._state.capt_frogs[sips[s][0]] = True
                 print(f"\033[31m{msg}\033[0m")
             elif sips[s][1] == 0:
                 remove.append(s)
@@ -152,10 +155,11 @@ if __name__ == "__main__":
 
 
         elapsed = time.time() - start_time
-        sleep = max(0, 0.0 - elapsed)
+        sleep = max(0, 0.1 - elapsed)
         time.sleep(sleep)
         env.render()
         done = terminated or truncated
+    print(f"Steps: {step}, Interventions: {intervention_count},")
     print(f"Full generation time: {full_gen_time:.6f} seconds, Full checking time: {full_check_time:.6f} seconds.")
     print(f"Full generation time: {full_gen_time:.6f} seconds, Full checking time: {full_check_time:.6f} seconds, Full fixing time: {full_fixing_time:.6f} seconds.")
     print(f"Average gen time: {full_gen_time/gen_count:.6f} seconds, Average check time: {full_check_time/gen_count:.6f} seconds, Average fixing time: {full_fixing_time/fixing_count:.6f} seconds.")
