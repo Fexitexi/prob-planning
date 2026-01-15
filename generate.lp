@@ -22,14 +22,14 @@ dist_grass(0,T) :- agent(X,Y,T), pref_grass(X,Y,T,-1).
 % lakes
 lake_frog_prox(I,T,W) :- lake(X1,Y1,I), frog(X2,Y2,I,T,W), |X1 - X2| + |Y1 - Y2| == 1.
 lake_agent_prox(I,T) :- lake(X1,Y1,I), agent(X2,Y2,T), |X1 - X2| + |Y1 - Y2| == 1.
-lake_timer(I,C-1,T+1) :- lake_timer(I,C,T), C!=0, T<horizon.
-lake_timer(I,0,T+1) :- lake_timer(I,0,T), T<horizon, not lake_agent_prox(I,T).
-lake_timer(I,lake_respawn,T+1) :- lake_timer(I,0,T), lake_agent_prox(I,T), T<horizon.
+lake_timer(I,C-1,T+1) :- lake_timer(I,C,T), C!=0, T<=horizon.
+lake_timer(I,0,T+1) :- lake_timer(I,0,T), T<=horizon, not lake_agent_prox(I,T).
+lake_timer(I,lake_respawn,T+1) :- lake_timer(I,0,T), lake_agent_prox(I,T), T<=horizon.
 
 %grass
-grass_timer(I,C-1,T+1) :- grass_timer(I,C,T), C!=0, T<horizon.
-grass_timer(I,0,T+1) :- grass_timer(I,0,T), grass(X,Y,I), T<horizon, not agent(X,Y,T).
-grass_timer(I,grass_respawn,T+1) :- grass_timer(I,0,T), grass(X,Y,I), agent(X,Y,T), T<horizon.
+grass_timer(I,C-1,T+1) :- grass_timer(I,C,T), C!=0, T<=horizon.
+grass_timer(I,0,T+1) :- grass_timer(I,0,T), grass(X,Y,I), T<=horizon, not agent(X,Y,T).
+grass_timer(I,grass_respawn,T+1) :- grass_timer(I,0,T), grass(X,Y,I), agent(X,Y,T), T<=horizon.
 
 pref(X,Y,T,A) :- lake_order(X,Y,I,O), lake_timer(I,0,T), lake_action(X,Y,I,A), not has_smaller_active(X,Y,I,T).
 pref(X,Y,T,-1) :- lake_order(X,Y,I,_), lake_timer(I,_,T), not any_lake_active(T).
@@ -58,7 +58,7 @@ valid_act_pos(X,Y,A,O,N) :- act_pos(X,Y,A,O,N), N > 1.
 f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), valid_act_pos(X,Y,A,O,N), not any_frog_timer(I,T,W), A < AP, R >= O * (30 / (N-1)), R < (O + 1) * (30 / (N-1)).
 f_action(AP,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), valid_act_pos(X,Y,AP,O,N), not any_frog_timer(I,T,W), R >= O * (30 / (N-1)), R < O * (30 / (N-1)) + 70.
 f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), act_pos(X,Y,A,O,1), not any_frog_timer(I,T,W).
-f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), valid_act_pos(X,Y,A,O,N), not any_frog_timer(I,T,W), A > AP, R >= 70 + (O - 1) * (30 / (N-1)), R < 70 + O * (30 / (N-1)).
+f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,AP), valid_act_pos(X,Y,A,O,N), not any_frog_timer(I,T,W), A > AP, AP != -1, R >= 70 + (O - 1) * (30 / (N-1)), R < 70 + O * (30 / (N-1)).
 f_action(A,I,T,W) :- f_rnd(I,T,W,R), frog(X,Y,I,T,W), pref(X,Y,T,-1), valid_act_pos(X,Y,A,O,N), not any_frog_timer(I,T,W), R >= O * (100 / N), R < (O + 1) * (100 / N).
 frog(X,Y,I,T+1,W) :- frog(X,Y,I,T,W), any_frog_timer(I,T,W).
 
@@ -71,17 +71,10 @@ frog(X,Y-1,I,T+1,W) :- frog(X,Y,I,T,W), f_action(3,I,T,W).    % move down
 %%% OPTIMIZATION %%%
 
 % try not to step onto frogs
-:~ norm_violation(W). [1@ horizon +1]
+:~ norm_violation(W). [1@ horizon+1,W]
 
-
-%%% contrary-to-duty
-
-% try not to step onto frogs
-:~ norm_violation(W). [1@ horizon +1,W]
-
-#maximize {R@ horizon-T : reward(R,T)}.
+#maximize {R@ horizon+1-T,T : reward(R,T)}.
 #show action/2.
-%#show ctd/1.
 #defined f_rnd/4.
 #defined wall/2.
 #defined lake/2.
