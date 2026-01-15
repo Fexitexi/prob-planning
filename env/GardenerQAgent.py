@@ -89,6 +89,7 @@ class GardenerQAgent:
         bestActions = list(
             filter(lambda x: x[1] == maxValue, actionValuePairs))
         #print(f"Best actions: {bestActions}, value: {maxValue}")
+        return random.choice(bestActions)[0]
         return bestActions[0][0]
 
     def getBestActions(self, state):
@@ -160,3 +161,13 @@ class GardenerQAgent:
                 key, value = line.strip().split("\t")
                 self._weights[key] = float(value)
         #print(self._weights)
+
+    def get_actionValuePairs(self, state):
+
+        actionValuePairs = [(action, self.getQValue(state, action))
+                            for action in
+                            np.where(get_action_mask(state) == 1)[0]]
+        if actionValuePairs == []:
+            return None
+
+        return actionValuePairs
