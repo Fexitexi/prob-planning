@@ -10,9 +10,9 @@ agent(X,Y,T+1) :- agent(X,Y,T), action(4,T).    % do nothing
 reward(@compute_reward_new(LAWN,LAKE,D_LAWN,D_LAKE),T) :- sips_lake(LAKE,T), mows_lawn(LAWN,T), dist_grass(D_LAWN,T), dist_lake(D_LAKE,T), T>0.
 
 % q-learning features
-sips_lake(1,T) :- lake_timer(I,lake_respawn,T).
+sips_lake(1,T) :- lake_timer(I,lake_respawn,T+1).
 sips_lake(0,T) :- lake_timer(_,_,T), not sips_lake(1,T).
-mows_lawn(1,T) :- grass_timer(I,grass_respawn,T).
+mows_lawn(1,T) :- grass_timer(I,grass_respawn,T+1).
 mows_lawn(0,T) :- grass_timer(_,_,T), not mows_lawn(1,T).
 dist_lake(D,T) :- agent(X,Y,T), pref_lake(X,Y,T,I), lake_dist(X,Y,D,I).
 dist_lake(0,T) :- agent(X,Y,T), pref_lake(X,Y,T,-1).
@@ -20,7 +20,6 @@ dist_grass(D,T) :- agent(X,Y,T), pref_grass(X,Y,T,I), grass_dist(X,Y,D,I).
 dist_grass(0,T) :- agent(X,Y,T), pref_grass(X,Y,T,-1).
 
 % lakes
-lake_frog_prox(F,L,T,W) :- lake(X1,Y1,L), frog(X2,Y2,F,T,W), |X1 - X2| + |Y1 - Y2| == 1.
 lake_agent_prox(I,T) :- lake(X1,Y1,I), agent(X2,Y2,T), |X1 - X2| + |Y1 - Y2| == 1.
 lake_timer(I,C-1,T+1) :- lake_timer(I,C,T), C!=0, T<=horizon.
 lake_timer(I,0,T+1) :- lake_timer(I,0,T), T<=horizon, not lake_agent_prox(I,T).
