@@ -55,6 +55,9 @@ def run(method=0):
     fix_times = []
     gen_count = 0
     fixing_count = 0
+    ctd_success = 0
+    ctd_failure = 0
+    frogs_killed = 0
     rot_counts = []
     sips = {}
     intervention_count = 0
@@ -154,11 +157,13 @@ def run(method=0):
             if state.agent[0] == state.frogs[sips[s][0]][0] and state.agent[
                 1] == state.frogs[sips[s][0]][1]:
                 remove.append(s)
+                ctd_success += 1
                 msg = "CDT SUCCESS!"
                 gar._state.capt_frogs[sips[s][0]] = True
-                print(f"\033[31m{msg}\033[0m")
+                #print(f"\033[31m{msg}\033[0m")
             elif sips[s][1] == 0:
                 remove.append(s)
+                ctd_failure += 1
         for r in remove:
             sips.pop(r)
         new_lake_full = state.lakes_full
@@ -188,22 +193,15 @@ def run(method=0):
         #time.sleep(sleep)
         #env.render()
         done = terminated or truncated
-    if method == 0:
-        if rot_counts:
-            avg_rot = sum(rot_counts) / len(rot_counts)
-            max_rot = max(rot_counts)
-            print(f"Average rot_checks: {avg_rot:.2f}, Max rot_checks: {max_rot:.2f}")
-        if check_times:
-            avg_check = sum(check_times) / len(check_times)
-            max_check = max(check_times)
-            print(f"Average checking time: {avg_check:.2f}, Max checking time: {max_check:.2f}")
-        if fix_times:
-            avg_fix = sum(fix_times) / len(fix_times)
-            max_fix = max(fix_times)
-            print(f"Average fixing time: {avg_fix:.2f}, Max fixing time: {max_fix:.2f}")
-        print(f"Steps: {step}, Interventions: {intervention_count}")
+    frogs_killed = state.dead_frogs.sum() - ctd_success
+    ctd_triggered = ctd_success + ctd_failure
+    if ctd_triggered > 0:
+        ctd_success = ctd_success / ctd_triggered
+    else:
+        ctd_success = 1
 
     env.close()
+    return step, intervention_count, rot_counts, check_times, fix_times, frogs_killed, ctd_success, ctd_triggered
 
 
 if __name__ == "__main__":
@@ -211,5 +209,38 @@ if __name__ == "__main__":
 
     # 0 - new framework / 1 - new framework w/ cache / 2 - old framework / 3 - RL
     method = 0
-    for i in range(30):
-        run(method)
+    rounds = 10
+
+    all_step = 0
+    all_intervention_count = 0
+    all_rot_counts = []
+    all_check_times = []
+    all_fix_times = []
+    all_frogs_killed = 0
+    all_ctd_success = 0
+    all_ctd_triggered = 0
+    for i in range(rounds):
+        step, intervention_count, rot_counts, check_times, fix_times, frogs_killed, ctd_success, ctd_triggered = run(method)
+        all_step += step
+        all_intervention_count += intervention_count
+        all_rot_counts.extend(rot_counts)
+        all_check_times.extend(check_times)
+        all_fix_times.extend(fix_times)
+        all_frogs_killed += frogs_killed
+        all_ctd_success += ctd_success
+        all_ctd_triggered += ctd_triggered
+    if method == 0:
+        if all_rot_counts:
+            avg_rot = sum(all_rot_counts) / len(all_rot_counts)
+            max_rot = max(all_rot_counts)
+            print(f"Average rot_checks: {avg_rot:.2f}, Max rot_checks: {max_rot:.2f}")
+        if all_check_times:
+            avg_check = sum(all_check_times) / len(all_check_times)
+            max_check = max(all_check_times)
+            print(f"Average checking time: {avg_check:.2f}, Max checking time: {max_check:.2f}")
+        if all_fix_times:
+            avg_fix = sum(all_fix_times) / len(all_fix_times)
+            max_fix = max(all_fix_times)
+            print(f"Average fixing time: {avg_fix:.2f}, Max fixing time: {max_fix:.2f}")
+        print(f"Steps: {all_step / rounds}, Interventions: {all_intervention_count / rounds}")
+        print(f"Frogs killed: {all_frogs_killed / rounds}, ctd_success: {all_ctd_success / rounds}, ctd_triggered: {all_ctd_triggered / rounds}")

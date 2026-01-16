@@ -454,7 +454,7 @@ class GardenerEnv(gym.Env):
                 if self._state.agent[0] == c and self._state.agent[1] == r:
                     self._state.dead_frogs[i] = True
                     msg = "FROG KILLED!"
-                    print(f"\033[31m{msg}\033[0m")
+                    #print(f"\033[31m{msg}\033[0m")
 
 
         reward = self.update_env(self._state, reward)
