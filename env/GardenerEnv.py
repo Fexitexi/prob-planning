@@ -148,6 +148,25 @@ class GardenerEnv(gym.Env):
         lake_positions = self.np_random.choice(list(all_positions),
                                                size=len(self._state.lakes),
                                                replace=False)
+        #easy
+        #lake_positions = []
+        #while len(lake_positions) < len(self._state.lakes):
+        #    lake_position = self.np_random.choice(list(all_positions),
+        #                                          size=1,
+        #                                          replace=False)
+        #    for lake_pos in lake_position:
+        #        lake_positions.append(tuple(lake_pos))
+        #        all_positions.discard(tuple(lake_pos))
+        #        lx, ly = lake_pos
+        #        neighbors = [
+        #            (lx + 1, ly), (lx - 1, ly), (lx + 1, ly + 1),
+        #            (lx - 1, ly - 1),
+        #            (lx, ly + 1), (lx, ly - 1), (lx - 1, ly + 1),
+        #            (lx + 1, ly - 1)
+        #        ]
+        #        for nx, ny in neighbors:
+        #            if 0 <= nx < self._state.size and 0 <= ny < self._state.size:
+        #                all_positions.discard((nx, ny))
 
         for lake_pos in lake_positions:
             all_positions.discard(tuple(lake_pos))
@@ -350,9 +369,10 @@ class GardenerEnv(gym.Env):
                 action = q_agent.getAction(state)
             self._dynamics.move_agent(state, action)
             self._dynamics.move_frogs(state)
+            self.update_env(state, 0 )
             executed_actions.append(action)
-            if np.any(np.all(state.agent == state.frogs, axis=1)):
-                return False, executed_actions
+            #if np.any(np.all(state.agent == state.frogs, axis=1)):
+            #    return False, executed_actions
         return True, executed_actions
 
 
@@ -495,7 +515,20 @@ class GardenerEnv(gym.Env):
                 state.lakes_full[i] = False
                 state.lake_timer[i] = state.lake_respawn
                 for f,(c,r) in enumerate(state.frogs):
-                    if abs(c - lx) + abs(r - ly) == 1:
+                    prox = False
+                    if not state.dead_frogs[f]:
+                        if abs(lx - c) + abs(
+                                ly - r) == 1:
+                            prox = True
+                        elif abs(lx - c) + abs(
+                                ly - r) == 2 and abs(
+                            lx - c) == 1:
+                            prox = True
+                        elif abs(lx - c) + abs(
+                                ly - r) == 2 and abs(
+                            ly - r) == 1:
+                            prox = True
+                    if prox:
                         state.frog_timer[f] = 5
         return reward
 

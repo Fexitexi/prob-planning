@@ -74,14 +74,15 @@ class ASPTransformer:
                             continue
                         if dist[nx, ny] > dist[x, y] + 1:
                             dist[nx, ny] = dist[x, y] + 1
-                            #todo: not sure if this is correct
                             if dist[x, y] == 0:
-                                # Immediate neighbor: The best step is the current move
-                                best[nx, ny] = np.array([dx, dy],
-                                                        dtype=np.int8)
+                                # (x, y) is the lake. We are at (nx, ny) next to it.
+                                # Set best move to [0, 0] to stop/interact here.
+                                best[nx, ny] = np.array([0, 0], dtype=np.int8)
                             else:
-                                # Further away: Inherit the best step from the previous node
-                                best[nx, ny] = best[x, y]
+                                # (x, y) is a safe path tile.
+                                # Point backwards to it: (-dx, -dy).
+                                best[nx, ny] = np.array([-dx, -dy],
+                                                        dtype=np.int8)
                             q.append((nx, ny))
 
             lake_dist.append(dist)
@@ -183,13 +184,13 @@ class ASPTransformer:
         # lake timer
         line = ""
         for i, c in enumerate(state.lake_timer):
-            line += f"lake_timer({i}, {c}, 0)."
+            line += f"lake_timer({i}, {c+1}, 0)."
         lines.append(line)
 
         # grass timer
         line = ""
         for i, c in enumerate(state.grass_timer):
-            line += f"grass_timer({i}, {c}, 0)."
+            line += f"grass_timer({i}, {c+1}, 0)."
         lines.append(line)
 
 
@@ -208,7 +209,7 @@ class ASPTransformer:
         lines.append(f"agent({state.agent[0]}, {state.agent[1]}, 0).")
 
         for s in sips:
-            lines.append(f"ctd({sips[s][0]}, {sips[s][1]}).")
+            lines.append(f"ctd({sips[s][0]}, {s}, {sips[s][1]}).")
 
         # check the frogs in the "sphere" of the agent
         # agent window
@@ -366,7 +367,7 @@ class ASPTransformer:
         lines.append(f"agent({state.agent[0]}, {state.agent[1]}, 0).")
 
         for s in sips:
-            lines.append(f"ctd({sips[s][0]}, {sips[s][1]}).")
+            lines.append(f"ctd({sips[s][0]}, {s}, {sips[s][1]}).")
 
         for i, a in enumerate(actions):
             lines.append(f"action({a}, {i}).")
