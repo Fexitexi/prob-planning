@@ -17,7 +17,7 @@ gym.envs.registration.register(
 )
 
 
-def run():
+def run(method=0):
     global env
     env = gym.make("GardenerEnv-v0")
     gar = env.unwrapped
@@ -30,8 +30,8 @@ def run():
     delta = 0.05
     n_asp = math.ceil((1 / (2 * math.pow(epsilon, 2))) * math.log(
         (2 * math.pow(n_actions, horizon)) / delta))
-    print(f"Number of asp: {n_asp}")
-    #
+    #print(f"Number of asp: {n_asp}")
+
     # load the pre-trained weights
     q_agent = GardenerQAgent()
     asp_transformer = ASPTransformer(q_agent)
@@ -47,16 +47,15 @@ def run():
     done = False
 
     state = ObservationState.from_obs(obs)
-    static = asp_transformer.build_static(state, horizon)
+    asp_transformer.build_static(state, horizon)
     lake_full = state.lakes_full
     actions = []
     step = 0
-    full_gen_time = 0
-    full_check_time = 0
-    full_fixing_time = 0
+    check_times = []
+    fix_times = []
     gen_count = 0
-    check_count = 0
     fixing_count = 0
+    rot_counts = []
     sips = {}
     intervention_count = 0
 
@@ -64,26 +63,13 @@ def run():
     clingoHelperOld = ClingoHelperOld(state, q_agent, horizon + 1, 10)
     clingoHelperOld.setup()
 
-    method = 0
-
     while not done:
         step += 1
         rot_count = 1
-        if sips:
-            print(f"Sips: {sips}")
-        # print(f"Step: {step}")
-        # check rule of three
-        # disable for now, testing rot in ASP
-        # rot = True
-        # for i in range(n_rot):
-        #    rot, executed_actions = gar.simulate_samples(horizon, q_agent, actions)
-        #    if not rot: break
-        # print(f"Sampling (rot) took {time.time() - start_time:.6f} seconds.")
-        start_time = time.time()
-        if method != 2:
+        if method < 2:
+            start_time_check = time.time()
             asp_transformer.reset()
             asp_transformer.build_dynamic_worlds(state, n_asp, horizon, sips)
-            # todo this only works as long as the policy is deterministic, otherwise I need to use the ASP program
             _, executed_actions = gar.simulate_samples(horizon, q_agent,
                                                        actions)
             new_violations, rot = asp_transformer.call_clingo_check(state,
@@ -91,8 +77,8 @@ def run():
                                                                     [], n_rot,
                                                                     rot_count,
                                                                     sips)
-            check_count += 1
-            full_check_time += time.time() - start_time
+            end_time_check = time.time()
+            check_times.append(end_time_check - start_time_check)
             if rot:
                 # rule of three is fulfilled, execute RL policy
                 if len(actions) > 0:
@@ -106,16 +92,12 @@ def run():
                 tested_policies = [executed_actions]
                 violations = new_violations
 
-                fixing_start_time = start_time
                 fixing_count += 1
-                intervention_count += 1
                 while True:
                     # print(rot_count)
-                    start_time = time.time()
                     policy_fix = asp_transformer.call_clingo_generate(state,
                                                                       violations)
                     gen_count += 1
-                    full_gen_time += time.time() - start_time
                     if rot_count != -1:
                         if policy_fix not in tested_policies:
                             rot_count += 1
@@ -124,38 +106,43 @@ def run():
                             rot_count = -1
                     else:
                         if policy_fix in tested_policies:
-                            actions = policy_fix
-                            action = actions.pop(0)
-                            #action = policy_fix.pop(0)
+                            if method == 1:
+                                actions = policy_fix
+                                action = actions.pop(0)
+                            else:
+                                action = policy_fix.pop(0)
                             break
-                    start_time = time.time()
                     new_violations, rot = asp_transformer.call_clingo_check(
                         state,
                         policy_fix,
                         violations,
                         n_rot,
                         rot_count, sips)
-                    check_count += 1
                     if rot:
-                        actions = policy_fix
-                        action = actions.pop(0)
-                        #action = policy_fix.pop(0)
+                        if method == 1:
+                            actions = policy_fix
+                            action = actions.pop(0)
+                        else:
+                            action = policy_fix.pop(0)
                         break
                     else:
                         for v in new_violations:
                             if v not in violations:
                                 violations.append(v)
-                    full_check_time += time.time() - start_time
-                fixing_time = time.time() - fixing_start_time
-                full_fixing_time += fixing_time
-
-        if method == 2:
-            # OLD METHOD EXECUTION
-            _, executed_actions = gar.simulate_samples(horizon, q_agent,
-                                                       actions)
-            action = clingoHelperOld.get_action(state)
-            if action != executed_actions[0]:
+                end_time_gen = time.time()
+                fix_times.append(end_time_gen - end_time_check)
+            best_actions = q_agent.getBestActions(state)
+            if action not in best_actions:
                 intervention_count += 1
+            rot_counts.append(rot_count)
+        elif method == 2:
+            # OLD METHOD EXECUTION
+            best_actions = q_agent.getBestActions(state)
+            action = clingoHelperOld.get_action(state)
+            if action not in best_actions:
+                intervention_count += 1
+        elif method == 3:
+            action = q_agent.getAction(state)
 
         obs, reward, terminated, truncated, info = env.step(action)
         state = ObservationState.from_obs(obs)
@@ -191,27 +178,38 @@ def run():
                             state.lakes[lake][1] - r) == 2 and abs(state.lakes[lake][1] - r) == 1:
                             prox = True
                     if prox:
-                        print(
-                            f"Frog {f} is at lake {lake}, which is at coordinates {c}, {r}.")
+                        #print(
+                        #    f"Frog {f} is at lake {lake}, which is at coordinates {c}, {r}.")
                         sips[lake] = [f, 4, c, r]
         lake_full = new_lake_full.copy()
 
-        elapsed = time.time() - start_time
-        # sleep = max(0, 0.1 - elapsed)
-        # time.sleep(sleep)
-        env.render()
+        # for visualization purposes
+        #sleep = max(0, 0.1)
+        #time.sleep(sleep)
+        #env.render()
         done = terminated or truncated
-    print(f"Steps: {step}, Interventions: {intervention_count},")
-    #print(
-    #    f"Full generation time: {full_gen_time:.6f} seconds, Full checking time: {full_check_time:.6f} seconds.")
-    #print(
-    #    f"Full generation time: {full_gen_time:.6f} seconds, Full checking time: {full_check_time:.6f} seconds, Full fixing time: {full_fixing_time:.6f} seconds.")
-    #print(
-    #    f"Average gen time: {full_gen_time / gen_count:.6f} seconds, Average check time: {full_check_time / gen_count:.6f} seconds, Average fixing time: {full_fixing_time / fixing_count:.6f} seconds.")
+    if method == 0:
+        if rot_counts:
+            avg_rot = sum(rot_counts) / len(rot_counts)
+            max_rot = max(rot_counts)
+            print(f"Average rot_checks: {avg_rot:.2f}, Max rot_checks: {max_rot:.2f}")
+        if check_times:
+            avg_check = sum(check_times) / len(check_times)
+            max_check = max(check_times)
+            print(f"Average checking time: {avg_check:.2f}, Max checking time: {max_check:.2f}")
+        if fix_times:
+            avg_fix = sum(fix_times) / len(fix_times)
+            max_fix = max(fix_times)
+            print(f"Average fixing time: {avg_fix:.2f}, Max fixing time: {max_fix:.2f}")
+        print(f"Steps: {step}, Interventions: {intervention_count}")
 
     env.close()
 
 
 if __name__ == "__main__":
+    random.seed(42)
+
+    # 0 - new framework / 1 - new framework w/ cache / 2 - old framework / 3 - RL
+    method = 0
     for i in range(30):
-        run()
+        run(method)
