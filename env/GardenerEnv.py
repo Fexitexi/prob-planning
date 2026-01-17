@@ -20,7 +20,7 @@ class GardenerEnv(gym.Env):
         self._state.size = size
         self._state.grass_respawn = grass_respawn
         self._state.lake_respawn = lake_respawn
-        num_frogs = max(1, int(size * size * 0.01))
+        num_frogs = max(1, int(size * size * 0.02))
         num_lakes = max(1, int(size * size * 0.02))
         num_grass = max(1, int(size * size * 0.04))
         num_walls = int(size * size * 0.20)

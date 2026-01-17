@@ -1,5 +1,5 @@
 import math
-
+import argparse
 import gymnasium as gym
 import time
 import random
@@ -17,9 +17,9 @@ gym.envs.registration.register(
 )
 
 
-def run(method=0, seed=None, ctd=False, horizon=3):
+def run(method=0, seed=None, ctd=False, horizon=3, size=15, render=False):
     global env
-    env = gym.make("GardenerEnv-v0")
+    env = gym.make("GardenerEnv-v0", size=size)
     gar = env.unwrapped
 
     # parameter
@@ -193,7 +193,8 @@ def run(method=0, seed=None, ctd=False, horizon=3):
         # for visualization purposes
         #sleep = max(0, 0.1)
         #time.sleep(sleep)
-        env.render()
+        if render:
+            env.render()
         done = terminated or truncated
 
     ctd_triggered = ctd_success + ctd_failure
@@ -204,22 +205,35 @@ def run(method=0, seed=None, ctd=False, horizon=3):
 
     frogs_killed = state.dead_frogs.sum()
     if ctd:
-        frogs_killed -= ctd_success
+        frogs_killed -= (ctd_success * frogs_killed)
+
     env.close()
     return step, intervention_count, rot_counts, check_times, fix_times, frogs_killed, ctd_success, ctd_triggered
 
 
 if __name__ == "__main__":
-    random.seed(42)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--method", type=int, default=0, help="0 - new framework / 1 - new framework w/ cache / 2 - old framework / 3 - RL")
+    parser.add_argument("--horizon", type=int, default=3, help="Horizon")
+    parser.add_argument("--rounds", type=int, default=10, help="Number of rounds")
+    parser.add_argument("--seed", type=int, default=42, help="Seed")
+    parser.add_argument("--ctd", type=int, default=0, help="0 - no ctd / 1 - ctd")
+    parser.add_argument("--render", type=int, default=0, help="0 - no render / 1 - render")
+    parser.add_argument("--size", type=int, default=15, help="grid size")
+    args = parser.parse_args()
+
+    random.seed(args.seed)
     seeds = []
-    for i in range(10):
+    for i in range(args.rounds):
         seeds.append(random.randint(0, 1000000))
 
     # 0 - new framework / 1 - new framework w/ cache / 2 - old framework / 3 - RL
-    method = 0
-    rounds = 10
-    ctd = False
-    horizon = 3
+    method = args.method
+    rounds = args.rounds
+    ctd = args.ctd
+    horizon = args.horizon
+    render = args.render
+    size = args.size
 
     all_step = 0
     all_intervention_count = 0
@@ -230,7 +244,7 @@ if __name__ == "__main__":
     all_ctd_success = 0
     all_ctd_triggered = 0
     for i in range(rounds):
-        step, intervention_count, rot_counts, check_times, fix_times, frogs_killed, ctd_success, ctd_triggered = run(method, seeds[i], ctd, horizon)
+        step, intervention_count, rot_counts, check_times, fix_times, frogs_killed, ctd_success, ctd_triggered = run(method, seeds[i], ctd, horizon, size, render)
         all_step += step
         all_intervention_count += intervention_count
         all_rot_counts.extend(rot_counts)
@@ -239,19 +253,26 @@ if __name__ == "__main__":
         all_frogs_killed += frogs_killed
         all_ctd_success += ctd_success
         all_ctd_triggered += ctd_triggered
-    if method == 0:
+    if method == 0 or method == 1:
         if all_rot_counts:
-            avg_rot = sum(all_rot_counts) / len(all_rot_counts)
+            sum_rot = 0
+            count_neg = 0
+            for r in all_rot_counts:
+                if r != -1:
+                    sum_rot += r
+                else:
+                    count_neg += 1
+            avg_rot = sum_rot / (len(all_rot_counts) - count_neg)
             max_rot = max(all_rot_counts)
-            print(f"Average rot_checks: {avg_rot:.2f}, Max rot_checks: {max_rot:.2f}")
+            print(f"Average rot_checks: {avg_rot:.2f}, Max rot_checks: {max_rot:.2f}, Neg rot_checks: {count_neg}")
         if all_check_times:
             avg_check = sum(all_check_times) / len(all_check_times)
             max_check = max(all_check_times)
-            print(f"Average checking time: {avg_check:.2f}, Max checking time: {max_check:.2f}")
+            print(f"Average checking time: {avg_check:.4f}, Max checking time: {max_check:.4f}")
     if all_fix_times and method < 3:
         avg_fix = sum(all_fix_times) / len(all_fix_times)
         max_fix = max(all_fix_times)
-        print(f"Average fixing time: {avg_fix:.2f}, Max fixing time: {max_fix:.2f}")
+        print(f"Average fixing time: {avg_fix:.4f}, Max fixing time: {max_fix:.4f}")
     print(f"Steps: {all_step / rounds}, Interventions: {all_intervention_count / rounds}")
     print(f"Frogs killed: {all_frogs_killed / rounds}")
     if ctd:
