@@ -7,5 +7,6 @@
     "mem_limit" : 25600,
     "request_cpus" : 1,
     "working_dir" : ".",
-    "instances_are_parameters" : true
+    "instances_are_parameters" : true,
+    "partition" : "sunnycove"
 }
