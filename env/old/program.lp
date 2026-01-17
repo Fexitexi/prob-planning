@@ -48,11 +48,13 @@ reward(S, 0) :- action_taken(A,0), action(A,B), S = (horizon - 0) * B.
 
 
 % movement of the frogs
-fmove(F,0, T) | fmove(F,1, T) :- F=0..frogs-1, T=1..horizon - 1.
+fmove(F,0, T) | fmove(F,1, T)  | fmove(F,2, T) :- F=0..frogs-1, T=1..horizon - 1.
 frow(F,R + 1,T) | frow(F,R - 1,T) :- frow(F,R,T-1), fmove(F,0, T).
 fcol(F,C,T) :- fcol(F,C,T-1), fmove(F,0, T).
+fcol(F,C,T) :- fcol(F,C,T-1), fmove(F,2, T).
 fcol(F,C + 1,T) | fcol(F,C - 1,T) :- fcol(F,C,T-1), fmove(F,1, T).
 frow(F,R,T) :- frow(F,R,T-1), fmove(F,1, T).
+frow(F,R,T) :- frow(F,R,T-1), fmove(F,2, T).
 
 % saturate if frogs make illegal move
 sat :- fcol(_,C,_), C = -radius - 1.
@@ -71,6 +73,7 @@ fcol(F,C,T) :- C = -radius..radius, sat, T=1..horizon-1, F=0..frogs-1.
 frow(F,R,T) :- R = -radius..radius, sat, T=1..horizon-1, F=0..frogs-1.
 fmove(F,0,T) :- F=0..frogs-1, T=1..horizon-1, sat.
 fmove(F,1,T) :- F=0..frogs-1, T=1..horizon-1, sat.
+fmove(F,2,T) :- F=0..frogs-1, T=1..horizon-1, sat.
 
 % each frog either needs to be safely away from player or give penalty
 ok(T,F) :- pcol(C,T), fcol(F,C',T), C != C', ok(T-1).

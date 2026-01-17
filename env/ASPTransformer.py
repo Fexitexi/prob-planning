@@ -29,10 +29,13 @@ class ASPTransformer:
         self._generate = None
         self._horizon = None
         self._frogs = []
+        self._ctd = None
 
-    def reset(self):
+
+    def reset(self, ctd):
         self._state = None
         self._rnd = None
+        self._ctd = ctd
         self._dyn_lake_dict = None
         self._latest_model = None
         self._constraints.clear()
@@ -335,10 +338,16 @@ class ASPTransformer:
         self._latest_model = None
         with open("generate.lp", "r") as f:
             program = f.read()
-        with open("norms.lp", "r") as f:
-            norms = f.read()
+        with open("common.lp", "r") as f:
+            common = f.read()
+        if self._ctd:
+            with open("norms-ctd.lp", "r") as f:
+                norms = f.read()
+        else:
+            with open("norms.lp", "r") as f:
+                norms = f.read()
         self._generate = clingo.Control()
-        self._generate.add("base", [], f"{self._static}\n{self._dynamic}\n{program}\n{worlds}\n{dyn}\n{norms}")
+        self._generate.add("base", [], f"{self._static}\n{self._dynamic}\n{program}\n{common}\n{worlds}\n{dyn}\n{norms}")
         self._generate.ground([("base", [])], context=self)
         self._generate.solve(on_model=self.on_model)
         actions = [-1] * self._horizon
@@ -358,10 +367,16 @@ class ASPTransformer:
         dyn = self.build_dynamic(state)
         with open("check.lp", "r") as f:
             program = f.read()
-        with open("norms.lp", "r") as f:
-            norms = f.read()
+        with open("common.lp", "r") as f:
+            common = f.read()
+        if self._ctd:
+            with open("norms-ctd.lp", "r") as f:
+                norms = f.read()
+        else:
+            with open("norms.lp", "r") as f:
+                norms = f.read()
         self._check = clingo.Control()
-        self._check.add("base", [], f"{self._static}\n{program}\n{dyn}\n{norms}")
+        self._check.add("base", [], f"{self._static}\n{program}\n{dyn}\n{common}\n{norms}")
 
         # add frogs and agent
         lines = []

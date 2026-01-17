@@ -17,14 +17,13 @@ gym.envs.registration.register(
 )
 
 
-def run(method=0):
+def run(method=0, seed=None, ctd=False, horizon=3):
     global env
     env = gym.make("GardenerEnv-v0")
     gar = env.unwrapped
 
     # parameter
     n_actions = 5
-    horizon = 5
     n_rot = 60
     epsilon = 0.05
     delta = 0.05
@@ -39,7 +38,8 @@ def run(method=0):
     q_agent.load_weights("weights.pkl")
 
     # test the new loop
-    seed = random.randint(0, 1000000)
+    if seed is None:
+        seed = random.randint(0, 1000000)
     # saved seeds: 788618, 784741, 692529, 723724, 155116, 352561,540491,468544
     #seed = 978930
     print(f"Seed: {seed}")
@@ -71,7 +71,7 @@ def run(method=0):
         rot_count = 1
         if method < 2:
             start_time_check = time.time()
-            asp_transformer.reset()
+            asp_transformer.reset(ctd)
             asp_transformer.build_dynamic_worlds(state, n_asp, horizon, sips)
             _, executed_actions = gar.simulate_samples(horizon, q_agent,
                                                        actions)
@@ -140,10 +140,12 @@ def run(method=0):
             rot_counts.append(rot_count)
         elif method == 2:
             # OLD METHOD EXECUTION
+            start_time_gen = time.time()
             best_actions = q_agent.getBestActions(state)
             action = clingoHelperOld.get_action(state)
             if action not in best_actions:
                 intervention_count += 1
+            fix_times.append(time.time() - start_time_gen)
         elif method == 3:
             action = q_agent.getAction(state)
 
@@ -191,25 +193,33 @@ def run(method=0):
         # for visualization purposes
         #sleep = max(0, 0.1)
         #time.sleep(sleep)
-        #env.render()
+        env.render()
         done = terminated or truncated
-    frogs_killed = state.dead_frogs.sum() - ctd_success
+
     ctd_triggered = ctd_success + ctd_failure
     if ctd_triggered > 0:
         ctd_success = ctd_success / ctd_triggered
     else:
         ctd_success = 1
 
+    frogs_killed = state.dead_frogs.sum()
+    if ctd:
+        frogs_killed -= ctd_success
     env.close()
     return step, intervention_count, rot_counts, check_times, fix_times, frogs_killed, ctd_success, ctd_triggered
 
 
 if __name__ == "__main__":
     random.seed(42)
+    seeds = []
+    for i in range(10):
+        seeds.append(random.randint(0, 1000000))
 
     # 0 - new framework / 1 - new framework w/ cache / 2 - old framework / 3 - RL
     method = 0
     rounds = 10
+    ctd = False
+    horizon = 3
 
     all_step = 0
     all_intervention_count = 0
@@ -220,7 +230,7 @@ if __name__ == "__main__":
     all_ctd_success = 0
     all_ctd_triggered = 0
     for i in range(rounds):
-        step, intervention_count, rot_counts, check_times, fix_times, frogs_killed, ctd_success, ctd_triggered = run(method)
+        step, intervention_count, rot_counts, check_times, fix_times, frogs_killed, ctd_success, ctd_triggered = run(method, seeds[i], ctd, horizon)
         all_step += step
         all_intervention_count += intervention_count
         all_rot_counts.extend(rot_counts)
@@ -238,9 +248,11 @@ if __name__ == "__main__":
             avg_check = sum(all_check_times) / len(all_check_times)
             max_check = max(all_check_times)
             print(f"Average checking time: {avg_check:.2f}, Max checking time: {max_check:.2f}")
-        if all_fix_times:
-            avg_fix = sum(all_fix_times) / len(all_fix_times)
-            max_fix = max(all_fix_times)
-            print(f"Average fixing time: {avg_fix:.2f}, Max fixing time: {max_fix:.2f}")
-        print(f"Steps: {all_step / rounds}, Interventions: {all_intervention_count / rounds}")
-        print(f"Frogs killed: {all_frogs_killed / rounds}, ctd_success: {all_ctd_success / rounds}, ctd_triggered: {all_ctd_triggered / rounds}")
+    if all_fix_times and method < 3:
+        avg_fix = sum(all_fix_times) / len(all_fix_times)
+        max_fix = max(all_fix_times)
+        print(f"Average fixing time: {avg_fix:.2f}, Max fixing time: {max_fix:.2f}")
+    print(f"Steps: {all_step / rounds}, Interventions: {all_intervention_count / rounds}")
+    print(f"Frogs killed: {all_frogs_killed / rounds}")
+    if ctd:
+        print(f"ctd_success: {all_ctd_success / rounds}, ctd_triggered: {all_ctd_triggered / rounds}")
