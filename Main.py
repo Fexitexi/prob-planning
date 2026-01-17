@@ -43,7 +43,7 @@ def run(method=0, seed=None, ctd=False, horizon=3, size=15, render=False):
     # saved seeds: 788618, 784741, 692529, 723724, 155116, 352561,540491,468544
     #seed = 978930
     print(f"Seed: {seed}")
-    obs, info = env.reset(seed=seed)
+    obs, info = env.reset(seed=seed, options={"save_screenshot": True})
     done = False
 
     state = ObservationState.from_obs(obs)
@@ -69,7 +69,7 @@ def run(method=0, seed=None, ctd=False, horizon=3, size=15, render=False):
     while not done:
         step += 1
         rot_count = 1
-        if method < 2:
+        if method == 0:
             start_time_check = time.time()
             asp_transformer.reset(ctd)
             asp_transformer.build_dynamic_worlds(state, n_asp, horizon, sips)
@@ -109,11 +109,10 @@ def run(method=0, seed=None, ctd=False, horizon=3, size=15, render=False):
                             rot_count = -1
                     else:
                         if policy_fix in tested_policies:
-                            if method == 1:
-                                actions = policy_fix
-                                action = actions.pop(0)
-                            else:
-                                action = policy_fix.pop(0)
+                            # cache
+                            # actions = policy_fix
+                            # action = actions.pop(0)
+                            action = policy_fix.pop(0)
                             break
                     new_violations, rot = asp_transformer.call_clingo_check(
                         state,
@@ -122,11 +121,10 @@ def run(method=0, seed=None, ctd=False, horizon=3, size=15, render=False):
                         n_rot,
                         rot_count, sips)
                     if rot:
-                        if method == 1:
-                            actions = policy_fix
-                            action = actions.pop(0)
-                        else:
-                            action = policy_fix.pop(0)
+                        #cache
+                        #actions = policy_fix
+                        #action = actions.pop(0)
+                        action = policy_fix.pop(0)
                         break
                     else:
                         for v in new_violations:
@@ -253,7 +251,7 @@ if __name__ == "__main__":
         all_frogs_killed += frogs_killed
         all_ctd_success += ctd_success
         all_ctd_triggered += ctd_triggered
-    if method == 0 or method == 1:
+    if method == 0:
         if all_rot_counts:
             sum_rot = 0
             count_neg = 0
@@ -269,7 +267,7 @@ if __name__ == "__main__":
             avg_check = sum(all_check_times) / len(all_check_times)
             max_check = max(all_check_times)
             print(f"Average checking time: {avg_check:.4f}, Max checking time: {max_check:.4f}")
-    if all_fix_times and method < 3:
+    if all_fix_times and method < 2:
         avg_fix = sum(all_fix_times) / len(all_fix_times)
         max_fix = max(all_fix_times)
         print(f"Average fixing time: {avg_fix:.4f}, Max fixing time: {max_fix:.4f}")

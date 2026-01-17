@@ -261,7 +261,7 @@ class ASPTransformer:
                                 if (c, r) in self._lake_dict:
                                     for i, lake in enumerate(self._lake_dict[(c, r)]):
                                         #todo make this dynamic
-                                        if i > 10: continue
+                                        if i > 5: continue
                                         lines.append(f"lake_action({c}, {r}, {lake[0]}, {lake[2]}).")
                                         lines.append(f"lake_order({c}, {r}, {lake[0]}, {i}).")
                                 is_wall = np.any(
@@ -289,7 +289,7 @@ class ASPTransformer:
                     if (c, r) in self._lake_dict:
                         for i, lake in enumerate(self._lake_dict[(c, r)]):
                             #todo make this dynamic
-                            if i > 10: continue
+                            if i > 5: continue
                             lines.append(
                                 f"lake_action({c}, {r}, {lake[0]}, {lake[2]}).")
                             lines.append(
@@ -299,7 +299,7 @@ class ASPTransformer:
                     if (c, r) in self._grass_dict:
                         for i, grass in enumerate(self._grass_dict[(c, r)]):
                             # todo make this dynamic
-                            if i > 10: continue
+                            if i > 5: continue
                             lines.append(
                                 f"grass_order({c}, {r}, {grass[0]}, {i}).")
                             lines.append(
@@ -404,7 +404,7 @@ class ASPTransformer:
                                 for j, lake in enumerate(
                                         self._lake_dict[(c, r)]):
                                     #todo make this dynamic
-                                    if j > 10: continue
+                                    if j > 5: continue
                                     lines.append(
                                         f"lake_action({c}, {r}, {lake[0]}, {lake[2]}).")
                                     lines.append(
