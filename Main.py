@@ -43,7 +43,7 @@ def run(method=0, seed=None, ctd=False, horizon=3, size=15, render=False):
     # saved seeds: 788618, 784741, 692529, 723724, 155116, 352561,540491,468544
     #seed = 978930
     print(f"Seed: {seed}")
-    obs, info = env.reset(seed=seed, options={"save_screenshot": True})
+    obs, info = env.reset(seed=seed, options={"save_screenshot": False})
     done = False
 
     state = ObservationState.from_obs(obs)
@@ -130,8 +130,8 @@ def run(method=0, seed=None, ctd=False, horizon=3, size=15, render=False):
                         for v in new_violations:
                             if v not in violations:
                                 violations.append(v)
-                end_time_gen = time.time()
-                fix_times.append(end_time_gen - end_time_check)
+            end_time_gen = time.time()
+            fix_times.append(end_time_gen - start_time_check)
             best_actions = q_agent.getBestActions(state)
             if action not in best_actions:
                 intervention_count += 1

@@ -231,17 +231,14 @@ class ASPTransformer:
                         if i not in self._frogs and not self._state.dead_frogs[i]:
                             self._frogs.append(i)
 
-        self._rnd = []
+        self._rnd = {}
         # frogs
         for i in range(num_worlds):
-            random_world = []
-            for f, (c,r) in enumerate(state.frogs):
-                random_frog = []
+            self._rnd[i] = {}  # Initialize the world level
+            for f in self._frogs:
+                self._rnd[i][f] = {}  # Initialize the frog level
                 for t in range(horizon):
-                    ran = random.random()
-                    random_frog.append(ran)
-                random_world.append(random_frog)
-            self._rnd.append(random_world)
+                    self._rnd[i][f][t] = random.random()
 
         done = []
         for f_i, (c_f, r_f) in enumerate(state.frogs):
@@ -261,7 +258,7 @@ class ASPTransformer:
                                 if (c, r) in self._lake_dict:
                                     for i, lake in enumerate(self._lake_dict[(c, r)]):
                                         #todo make this dynamic
-                                        if i > 5: continue
+                                        if i > 10: continue
                                         lines.append(f"lake_action({c}, {r}, {lake[0]}, {lake[2]}).")
                                         lines.append(f"lake_order({c}, {r}, {lake[0]}, {i}).")
                                 is_wall = np.any(
@@ -289,7 +286,7 @@ class ASPTransformer:
                     if (c, r) in self._lake_dict:
                         for i, lake in enumerate(self._lake_dict[(c, r)]):
                             #todo make this dynamic
-                            if i > 5: continue
+                            if i > 10: continue
                             lines.append(
                                 f"lake_action({c}, {r}, {lake[0]}, {lake[2]}).")
                             lines.append(
@@ -299,7 +296,7 @@ class ASPTransformer:
                     if (c, r) in self._grass_dict:
                         for i, grass in enumerate(self._grass_dict[(c, r)]):
                             # todo make this dynamic
-                            if i > 5: continue
+                            if i > 10: continue
                             lines.append(
                                 f"grass_order({c}, {r}, {grass[0]}, {i}).")
                             lines.append(
@@ -404,7 +401,7 @@ class ASPTransformer:
                                 for j, lake in enumerate(
                                         self._lake_dict[(c, r)]):
                                     #todo make this dynamic
-                                    if j > 5: continue
+                                    if j > 10: continue
                                     lines.append(
                                         f"lake_action({c}, {r}, {lake[0]}, {lake[2]}).")
                                     lines.append(
