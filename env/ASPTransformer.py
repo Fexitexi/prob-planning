@@ -198,7 +198,7 @@ class ASPTransformer:
         for f in range(len(state.frog_timer)):
             if state.frog_timer[f] > 0:
                 for i in range(state.frog_timer[f]):
-                    lines.append(f"frog_timer({f}, {state.frog_timer[f] - 1}, {i}).")
+                    lines.append(f"frog_timer({f}, {i}).")
 
         return "\n".join(lines)
 

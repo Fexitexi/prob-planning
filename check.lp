@@ -37,7 +37,6 @@ frog(X,Y-1,I,T+1,W) :- frog(X,Y,I,T,W), f_action(3,I,T,W).    % move down
 
 
 #show norm_violation/1.
-#show lake_timer/3.
 #defined f_rnd/4.
 #defined act_pos/5.
 #defined lake_order/4.
