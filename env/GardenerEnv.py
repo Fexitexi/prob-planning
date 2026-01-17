@@ -23,7 +23,7 @@ class GardenerEnv(gym.Env):
         num_frogs = max(1, int(size * size * 0.02))
         num_lakes = max(1, int(size * size * 0.02))
         num_grass = max(1, int(size * size * 0.04))
-        num_walls = int(size * size * 0.20)
+        num_walls = int(size * size * 0.30)
         self._state.walls = np.full((num_walls, 2), -1, dtype=int)
 
         self._state.agent = np.array([-1, -1], dtype=int)
