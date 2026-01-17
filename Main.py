@@ -136,7 +136,7 @@ def run(method=0, seed=None, ctd=False, horizon=3, size=15, render=False):
             if action not in best_actions:
                 intervention_count += 1
             rot_counts.append(rot_count)
-        elif method == 2:
+        elif method == 1:
             # OLD METHOD EXECUTION
             start_time_gen = time.time()
             best_actions = q_agent.getBestActions(state)
@@ -144,7 +144,7 @@ def run(method=0, seed=None, ctd=False, horizon=3, size=15, render=False):
             if action not in best_actions:
                 intervention_count += 1
             fix_times.append(time.time() - start_time_gen)
-        elif method == 3:
+        elif method == 2:
             action = q_agent.getAction(state)
 
         obs, reward, terminated, truncated, info = env.step(action)
