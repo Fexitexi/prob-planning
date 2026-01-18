@@ -157,7 +157,6 @@ def run(method=0, seed=None, ctd=False, horizon=3, size=15, render=False):
         # add this to the environment
         remove = []
         for s in sips:
-            sips[s][1] -= 1
             if state.agent[0] == state.frogs[sips[s][0]][0] and state.agent[
                 1] == state.frogs[sips[s][0]][1]:
                 remove.append(s)
@@ -168,6 +167,7 @@ def run(method=0, seed=None, ctd=False, horizon=3, size=15, render=False):
             elif sips[s][1] == 0:
                 remove.append(s)
                 ctd_failure += 1
+            sips[s][1] -= 1
         for r in remove:
             sips.pop(r)
         new_lake_full = state.lakes_full
