@@ -280,7 +280,7 @@ if __name__ == "__main__":
     #print(f"Steps: {all_step / rounds}, Interventions: {all_intervention_count / rounds}")
     #print(f"Frogs killed: {all_frogs_killed / rounds}")
     if method == 3:
-        print(f"{all_step / rounds:.2f}, 0, 0, {all_frogs_killed / rounds:.2f}, {all_ctd_success / rounds:.2f}, {all_ctd_triggered / rounds:.2f}, {all_ctd_triggered / rounds:.2f}")
+        print(f"{all_step / rounds:.2f}, 0.00, 0.00, {all_frogs_killed / rounds:.2f}, {all_ctd_triggered / rounds:.2f}, {(1 - (all_ctd_success / rounds)) * (all_ctd_triggered / rounds):.2f}")
     else:
         print(f"{all_step / rounds:.2f}, {all_intervention_count / rounds:.2f}, {avg_fix * 1000:.2f}, {all_frogs_killed / rounds:.2f}, {all_ctd_triggered / rounds:.2f}, {(1 - (all_ctd_success / rounds)) * (all_ctd_triggered / rounds):.2f}")
     #if ctd:

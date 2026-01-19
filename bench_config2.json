@@ -1,0 +1,12 @@
+{
+    "name" : "bench_gardener2",
+    "executable" :  "python3 Main.py",
+    "configs" : "configs.txt",
+    "instances" : "instances.txt",
+    "timeout" : 21600,
+    "mem_limit" : 25600,
+    "request_cpus" : 1,
+    "working_dir" : ".",
+    "instances_are_parameters" : true,
+    "partition" : "sunnycove"
+}
