@@ -4,7 +4,7 @@ import gymnasium as gym
 import time
 import random
 
-from numpy.ma.core import count
+from numpy.ma.core import count, ceil
 
 from env.ASPTransformer import ASPTransformer
 from env.GardenerQAgent import GardenerQAgent
@@ -17,16 +17,14 @@ gym.envs.registration.register(
 )
 
 
-def run(method=0, seed=None, ctd=False, horizon=3, size=15, render=False):
+def run(method=0, seed=None, ctd=False, horizon=3, size=15, epsilon=0.05, delta=0.05, render=False):
     global env
     env = gym.make("GardenerEnv-v0", size=size)
     gar = env.unwrapped
 
     # parameter
     n_actions = 5
-    n_rot = 60
-    epsilon = 0.05
-    delta = 0.05
+    n_rot = math.ceil(math.log(delta)/math.log(1-epsilon))
     n_asp = math.ceil((1 / (2 * math.pow(epsilon, 2))) * math.log(
         (2 * math.pow(n_actions, horizon)) / delta))
     #print(f"Number of asp: {n_asp}")
@@ -42,7 +40,7 @@ def run(method=0, seed=None, ctd=False, horizon=3, size=15, render=False):
         seed = random.randint(0, 1000000)
     # saved seeds: 788618, 784741, 692529, 723724, 155116, 352561,540491,468544
     #seed = 978930
-    print(f"Seed: {seed}")
+    #print(f"Seed: {seed}")
     obs, info = env.reset(seed=seed, options={"save_screenshot": False})
     done = False
 
@@ -222,6 +220,8 @@ if __name__ == "__main__":
     parser.add_argument("--ctd", type=int, default=0, help="0 - no ctd / 1 - ctd")
     parser.add_argument("--render", type=int, default=0, help="0 - no render / 1 - render")
     parser.add_argument("--size", type=int, default=15, help="grid size")
+    parser.add_argument("--epsilon", type=float, default=0.05, help="error tolerance")
+    parser.add_argument("--delta", type=float, default=0.05, help="confidence delta (0.05 = 95% confidence)")
     args = parser.parse_args()
 
     random.seed(args.seed)
@@ -236,6 +236,8 @@ if __name__ == "__main__":
     horizon = args.horizon
     render = args.render
     size = args.size
+    epsilon = args.epsilon
+    delta = args.delta
 
     all_step = 0
     all_intervention_count = 0
@@ -246,7 +248,7 @@ if __name__ == "__main__":
     all_ctd_success = 0
     all_ctd_triggered = 0
     for i in range(rounds):
-        step, intervention_count, rot_counts, check_times, fix_times, frogs_killed, ctd_success, ctd_triggered = run(method, seeds[i], ctd, horizon, size, render)
+        step, intervention_count, rot_counts, check_times, fix_times, frogs_killed, ctd_success, ctd_triggered = run(method, seeds[i], ctd, horizon, size, epsilon, delta, render)
         all_step += step
         all_intervention_count += intervention_count
         all_rot_counts.extend(rot_counts)
@@ -266,16 +268,20 @@ if __name__ == "__main__":
                     count_neg += 1
             avg_rot = sum_rot / (len(all_rot_counts) - count_neg)
             max_rot = max(all_rot_counts)
-            print(f"Average rot_checks: {avg_rot:.2f}, Max rot_checks: {max_rot:.2f}, Neg rot_checks: {count_neg}")
+            #print(f"Average rot_checks: {avg_rot:.2f}, Max rot_checks: {max_rot:.2f}, Neg rot_checks: {count_neg}")
         if all_check_times:
             avg_check = sum(all_check_times) / len(all_check_times)
             max_check = max(all_check_times)
-            print(f"Average checking time: {avg_check:.4f}, Max checking time: {max_check:.4f}")
+            #print(f"Average checking time: {avg_check:.4f}, Max checking time: {max_check:.4f}")
     if all_fix_times and method < 3:
         avg_fix = sum(all_fix_times) / len(all_fix_times)
         max_fix = max(all_fix_times)
-        print(f"Average fixing time: {avg_fix:.4f}, Max fixing time: {max_fix:.4f}")
-    print(f"Steps: {all_step / rounds}, Interventions: {all_intervention_count / rounds}")
-    print(f"Frogs killed: {all_frogs_killed / rounds}")
-    if ctd:
-        print(f"ctd_success: {all_ctd_success / rounds}, ctd_triggered: {all_ctd_triggered / rounds}")
+        #print(f"Average fixing time: {avg_fix:.4f}, Max fixing time: {max_fix:.4f}")
+    #print(f"Steps: {all_step / rounds}, Interventions: {all_intervention_count / rounds}")
+    #print(f"Frogs killed: {all_frogs_killed / rounds}")
+    if method == 3:
+        print(f"{all_step / rounds:.2f}, 0, 0, {all_frogs_killed / rounds:.2f}, {all_ctd_success / rounds:.2f}, {all_ctd_triggered / rounds:.2f}, {all_ctd_triggered / rounds:.2f}")
+    else:
+        print(f"{all_step / rounds:.2f}, {all_intervention_count / rounds:.2f}, {avg_fix * 1000:.2f}, {all_frogs_killed / rounds:.2f}, {all_ctd_triggered / rounds:.2f}, {(1 - (all_ctd_success / rounds)) * (all_ctd_triggered / rounds):.2f}")
+    #if ctd:
+    #    print(f"ctd_success: {all_ctd_success / rounds}, ctd_triggered: {all_ctd_triggered / rounds}")

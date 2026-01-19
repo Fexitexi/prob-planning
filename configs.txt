@@ -1,12 +1,87 @@
---method=0 --rounds=100 --ctd=0 --size=15 --horizon=3
---method=1 --rounds=100 --ctd=0 --size=15 --horizon=3
+--method=0 --rounds=100 --ctd=0 --size=15 --horizon=3 --epsilon=0.10 --delta=0.10
+--method=1 --rounds=100 --ctd=0 --size=15 --horizon=3 --epsilon=0.10 --delta=0.10
+--method=0 --rounds=100 --ctd=0 --size=15 --horizon=3 --epsilon=0.05 --delta=0.05
+--method=1 --rounds=100 --ctd=0 --size=15 --horizon=3 --epsilon=0.05 --delta=0.05
+--method=0 --rounds=100 --ctd=0 --size=15 --horizon=3 --epsilon=0.05 --delta=0.01
+--method=1 --rounds=100 --ctd=0 --size=15 --horizon=3 --epsilon=0.05 --delta=0.01
+--method=0 --rounds=100 --ctd=0 --size=15 --horizon=3 --epsilon=0.03 --delta=0.01
+--method=1 --rounds=100 --ctd=0 --size=15 --horizon=3 --epsilon=0.03 --delta=0.01
 --method=2 --rounds=100 --ctd=0 --size=15 --horizon=3
+--method=0 --rounds=100 --ctd=0 --size=15 --horizon=5 --epsilon=0.10 --delta=0.10
+--method=1 --rounds=100 --ctd=0 --size=15 --horizon=5 --epsilon=0.10 --delta=0.10
+--method=0 --rounds=100 --ctd=0 --size=15 --horizon=5 --epsilon=0.05 --delta=0.05
+--method=1 --rounds=100 --ctd=0 --size=15 --horizon=5 --epsilon=0.05 --delta=0.05
+--method=0 --rounds=100 --ctd=0 --size=15 --horizon=5 --epsilon=0.05 --delta=0.01
+--method=1 --rounds=100 --ctd=0 --size=15 --horizon=5 --epsilon=0.05 --delta=0.01
+--method=0 --rounds=100 --ctd=0 --size=15 --horizon=5 --epsilon=0.03 --delta=0.01
+--method=1 --rounds=100 --ctd=0 --size=15 --horizon=5 --epsilon=0.03 --delta=0.01
+--method=2 --rounds=100 --ctd=0 --size=15 --horizon=5
 --method=3 --rounds=100 --ctd=0 --size=15
---method=0 --rounds=100 --ctd=1 --size=15 --horizon=5
---method=1 --rounds=100 --ctd=1 --size=15 --horizon=5
+--method=0 --rounds=100 --ctd=1 --size=15 --horizon=5 --epsilon=0.10 --delta=0.10
+--method=1 --rounds=100 --ctd=1 --size=15 --horizon=5 --epsilon=0.10 --delta=0.10
+--method=0 --rounds=100 --ctd=1 --size=15 --horizon=5 --epsilon=0.05 --delta=0.05
+--method=1 --rounds=100 --ctd=1 --size=15 --horizon=5 --epsilon=0.05 --delta=0.05
+--method=0 --rounds=100 --ctd=1 --size=15 --horizon=5 --epsilon=0.05 --delta=0.01
+--method=1 --rounds=100 --ctd=1 --size=15 --horizon=5 --epsilon=0.05 --delta=0.01
+--method=0 --rounds=100 --ctd=1 --size=15 --horizon=5 --epsilon=0.03 --delta=0.01
+--method=1 --rounds=100 --ctd=1 --size=15 --horizon=5 --epsilon=0.03 --delta=0.01
 --method=2 --rounds=100 --ctd=1 --size=15 --horizon=5
 --method=3 --rounds=100 --ctd=1 --size=15
---method=0 --rounds=10 --ctd=0 --size=100 --horizon=3
---method=1 --rounds=10 --ctd=0 --size=100 --horizon=3
---method=2 --rounds=10 --ctd=0 --size=100 --horizon=3
---method=3 --rounds=10 --ctd=0 --size=100
+--method=0 --rounds=100 --ctd=0 --size=50 --horizon=3 --epsilon=0.10 --delta=0.10
+--method=1 --rounds=100 --ctd=0 --size=50 --horizon=3 --epsilon=0.10 --delta=0.10
+--method=0 --rounds=100 --ctd=0 --size=50 --horizon=3 --epsilon=0.05 --delta=0.05
+--method=1 --rounds=100 --ctd=0 --size=50 --horizon=3 --epsilon=0.05 --delta=0.05
+--method=0 --rounds=100 --ctd=0 --size=50 --horizon=3 --epsilon=0.05 --delta=0.01
+--method=1 --rounds=100 --ctd=0 --size=50 --horizon=3 --epsilon=0.05 --delta=0.01
+--method=0 --rounds=100 --ctd=0 --size=50 --horizon=3 --epsilon=0.03 --delta=0.01
+--method=1 --rounds=100 --ctd=0 --size=50 --horizon=3 --epsilon=0.03 --delta=0.01
+--method=2 --rounds=100 --ctd=0 --size=50 --horizon=3
+--method=0 --rounds=100 --ctd=0 --size=50 --horizon=5 --epsilon=0.10 --delta=0.10
+--method=1 --rounds=100 --ctd=0 --size=50 --horizon=5 --epsilon=0.10 --delta=0.10
+--method=0 --rounds=100 --ctd=0 --size=50 --horizon=5 --epsilon=0.05 --delta=0.05
+--method=1 --rounds=100 --ctd=0 --size=50 --horizon=5 --epsilon=0.05 --delta=0.05
+--method=0 --rounds=100 --ctd=0 --size=50 --horizon=5 --epsilon=0.05 --delta=0.01
+--method=1 --rounds=100 --ctd=0 --size=50 --horizon=5 --epsilon=0.05 --delta=0.01
+--method=0 --rounds=100 --ctd=0 --size=50 --horizon=5 --epsilon=0.03 --delta=0.01
+--method=1 --rounds=100 --ctd=0 --size=50 --horizon=5 --epsilon=0.03 --delta=0.01
+--method=2 --rounds=100 --ctd=0 --size=50 --horizon=5
+--method=3 --rounds=100 --ctd=0 --size=50
+--method=0 --rounds=100 --ctd=1 --size=50 --horizon=5 --epsilon=0.10 --delta=0.10
+--method=1 --rounds=100 --ctd=1 --size=50 --horizon=5 --epsilon=0.10 --delta=0.10
+--method=0 --rounds=100 --ctd=1 --size=50 --horizon=5 --epsilon=0.05 --delta=0.05
+--method=1 --rounds=100 --ctd=1 --size=50 --horizon=5 --epsilon=0.05 --delta=0.05
+--method=0 --rounds=100 --ctd=1 --size=50 --horizon=5 --epsilon=0.05 --delta=0.01
+--method=1 --rounds=100 --ctd=1 --size=50 --horizon=5 --epsilon=0.05 --delta=0.01
+--method=0 --rounds=100 --ctd=1 --size=50 --horizon=5 --epsilon=0.03 --delta=0.01
+--method=1 --rounds=100 --ctd=1 --size=50 --horizon=5 --epsilon=0.03 --delta=0.01
+--method=2 --rounds=100 --ctd=1 --size=50 --horizon=5
+--method=3 --rounds=100 --ctd=1 --size=50
+--method=0 --rounds=100 --ctd=0 --size=100 --horizon=3 --epsilon=0.10 --delta=0.10
+--method=1 --rounds=100 --ctd=0 --size=100 --horizon=3 --epsilon=0.10 --delta=0.10
+--method=0 --rounds=100 --ctd=0 --size=100 --horizon=3 --epsilon=0.05 --delta=0.05
+--method=1 --rounds=100 --ctd=0 --size=100 --horizon=3 --epsilon=0.05 --delta=0.05
+--method=0 --rounds=100 --ctd=0 --size=100 --horizon=3 --epsilon=0.05 --delta=0.01
+--method=1 --rounds=100 --ctd=0 --size=100 --horizon=3 --epsilon=0.05 --delta=0.01
+--method=0 --rounds=100 --ctd=0 --size=100 --horizon=3 --epsilon=0.03 --delta=0.01
+--method=1 --rounds=100 --ctd=0 --size=100 --horizon=3 --epsilon=0.03 --delta=0.01
+--method=2 --rounds=100 --ctd=0 --size=100 --horizon=3
+--method=0 --rounds=100 --ctd=0 --size=100 --horizon=5 --epsilon=0.10 --delta=0.10
+--method=1 --rounds=100 --ctd=0 --size=100 --horizon=5 --epsilon=0.10 --delta=0.10
+--method=0 --rounds=100 --ctd=0 --size=100 --horizon=5 --epsilon=0.05 --delta=0.05
+--method=1 --rounds=100 --ctd=0 --size=100 --horizon=5 --epsilon=0.05 --delta=0.05
+--method=0 --rounds=100 --ctd=0 --size=100 --horizon=5 --epsilon=0.05 --delta=0.01
+--method=1 --rounds=100 --ctd=0 --size=100 --horizon=5 --epsilon=0.05 --delta=0.01
+--method=0 --rounds=100 --ctd=0 --size=100 --horizon=5 --epsilon=0.03 --delta=0.01
+--method=1 --rounds=100 --ctd=0 --size=100 --horizon=5 --epsilon=0.03 --delta=0.01
+--method=2 --rounds=100 --ctd=0 --size=100 --horizon=5
+--method=3 --rounds=100 --ctd=0 --size=100
+--method=0 --rounds=100 --ctd=1 --size=100 --horizon=5 --epsilon=0.10 --delta=0.10
+--method=1 --rounds=100 --ctd=1 --size=100 --horizon=5 --epsilon=0.10 --delta=0.10
+--method=0 --rounds=100 --ctd=1 --size=100 --horizon=5 --epsilon=0.05 --delta=0.05
+--method=1 --rounds=100 --ctd=1 --size=100 --horizon=5 --epsilon=0.05 --delta=0.05
+--method=0 --rounds=100 --ctd=1 --size=100 --horizon=5 --epsilon=0.05 --delta=0.01
+--method=1 --rounds=100 --ctd=1 --size=100 --horizon=5 --epsilon=0.05 --delta=0.01
+--method=0 --rounds=100 --ctd=1 --size=100 --horizon=5 --epsilon=0.03 --delta=0.01
+--method=1 --rounds=100 --ctd=1 --size=100 --horizon=5 --epsilon=0.03 --delta=0.01
+--method=2 --rounds=100 --ctd=1 --size=100 --horizon=5
+--method=3 --rounds=100 --ctd=1 --size=100
