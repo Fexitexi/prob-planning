@@ -4,8 +4,6 @@ import gymnasium as gym
 import time
 import random
 
-from numpy.ma.core import count, ceil
-
 from env.ASPTransformer import ASPTransformer
 from env.GardenerQAgent import GardenerQAgent
 from env.old.ClingoHelper import ClingoHelperOld
@@ -17,7 +15,7 @@ gym.envs.registration.register(
 )
 
 
-def run(method=0, seed=None, ctd=False, horizon=3, size=15, epsilon=0.05, delta=0.05, render=False):
+def run(strata=1, sampling=0, method=0, seed=None, ctd=False, horizon=3, size=15, epsilon=0.05, delta=0.05, render=False):
     global env
     env = gym.make("GardenerEnv-v0", size=size)
     gar = env.unwrapped
@@ -27,11 +25,11 @@ def run(method=0, seed=None, ctd=False, horizon=3, size=15, epsilon=0.05, delta=
     n_rot = math.ceil(math.log(delta)/math.log(1-epsilon))
     n_asp = math.ceil((1 / (2 * math.pow(epsilon, 2))) * math.log(
         (2 * math.pow(n_actions, horizon)) / delta))
-    #print(f"Number of asp: {n_asp}")
+    # print(f"Number of asp: {n_asp}")
 
     # load the pre-trained weights
     q_agent = GardenerQAgent()
-    asp_transformer = ASPTransformer(q_agent)
+    asp_transformer = ASPTransformer(q_agent, sampling, strata)
     q_agent.stopLearning()
     q_agent.load_weights("weights.pkl")
 
@@ -39,8 +37,8 @@ def run(method=0, seed=None, ctd=False, horizon=3, size=15, epsilon=0.05, delta=
     if seed is None:
         seed = random.randint(0, 1000000)
     # saved seeds: 788618, 784741, 692529, 723724, 155116, 352561,540491,468544
-    #seed = 978930
-    #print(f"Seed: {seed}")
+    # seed = 978930
+    # print(f"Seed: {seed}")
     obs, info = env.reset(seed=seed, options={"save_screenshot": False})
     done = False
 
@@ -96,8 +94,8 @@ def run(method=0, seed=None, ctd=False, horizon=3, size=15, epsilon=0.05, delta=
                 fixing_count += 1
                 while True:
                     # print(rot_count)
-                    policy_fix = asp_transformer.call_clingo_generate(state,
-                                                                      violations)
+                    policy_fix = asp_transformer.call_clingo_generate(
+                        state, violations)
                     gen_count += 1
                     if rot_count != -1:
                         if policy_fix not in tested_policies:
@@ -121,7 +119,7 @@ def run(method=0, seed=None, ctd=False, horizon=3, size=15, epsilon=0.05, delta=
                         n_rot,
                         rot_count, sips)
                     if rot:
-                        #cache
+                        # cache
                         if method == 1:
                             actions = policy_fix
                             action = actions.pop(0)
@@ -156,12 +154,12 @@ def run(method=0, seed=None, ctd=False, horizon=3, size=15, epsilon=0.05, delta=
         remove = []
         for s in sips:
             if state.agent[0] == state.frogs[sips[s][0]][0] and state.agent[
-                1] == state.frogs[sips[s][0]][1]:
+                    1] == state.frogs[sips[s][0]][1]:
                 remove.append(s)
                 ctd_success += 1
                 msg = "CDT SUCCESS!"
                 gar._state.capt_frogs[sips[s][0]] = True
-                #print(f"\033[31m{msg}\033[0m")
+                # print(f"\033[31m{msg}\033[0m")
             elif sips[s][1] == 0:
                 remove.append(s)
                 ctd_failure += 1
@@ -171,28 +169,28 @@ def run(method=0, seed=None, ctd=False, horizon=3, size=15, epsilon=0.05, delta=
         new_lake_full = state.lakes_full
         for lake in range(len(lake_full)):
             if lake_full[lake] and not new_lake_full[lake]:
-                #print(f"Lake {lake} is now empty at step {step}.")
+                # print(f"Lake {lake} is now empty at step {step}.")
                 for f, (c, r) in enumerate(state.frogs):
                     prox = False
                     if not state.dead_frogs[f]:
                         if abs(state.lakes[lake][0] - c) + abs(
-                            state.lakes[lake][1] - r) == 1:
+                                state.lakes[lake][1] - r) == 1:
                             prox = True
                         elif abs(state.lakes[lake][0] - c) + abs(
-                            state.lakes[lake][1] - r) == 2 and abs(state.lakes[lake][0] - c) == 1:
+                                state.lakes[lake][1] - r) == 2 and abs(state.lakes[lake][0] - c) == 1:
                             prox = True
                         elif abs(state.lakes[lake][0] - c) + abs(
-                            state.lakes[lake][1] - r) == 2 and abs(state.lakes[lake][1] - r) == 1:
+                                state.lakes[lake][1] - r) == 2 and abs(state.lakes[lake][1] - r) == 1:
                             prox = True
                     if prox:
-                        #print(
+                        # print(
                         #    f"Frog {f} is at lake {lake}, which is at coordinates {c}, {r}.")
                         sips[lake] = [f, 4, c, r]
         lake_full = new_lake_full.copy()
 
         # for visualization purposes
-        #sleep = max(0, 0.1)
-        #time.sleep(sleep)
+        # sleep = max(0, 0.1)
+        # time.sleep(sleep)
         if render:
             env.render()
         done = terminated or truncated
@@ -213,15 +211,25 @@ def run(method=0, seed=None, ctd=False, horizon=3, size=15, epsilon=0.05, delta=
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--method", type=int, default=0, help="0 - new framework / 1 - new framework w/ cache / 2 - old framework / 3 - RL")
+    parser.add_argument("--strata", type=int, default=1,
+                        help="specifies the amount of trajectories within one batch for sampling=1")
+    parser.add_argument("--sampling", type=int, default=0,
+                        help="0 - random / 1 - stratified / 2 - MCTS")
+    parser.add_argument("--method", type=int, default=0,
+                        help="0 - new framework / 1 - new framework w/ cache / 2 - old framework / 3 - RL")
     parser.add_argument("--horizon", type=int, default=3, help="Horizon")
-    parser.add_argument("--rounds", type=int, default=10, help="Number of rounds")
+    parser.add_argument("--rounds", type=int, default=10,
+                        help="Number of rounds")
     parser.add_argument("--seed", type=int, default=42, help="Seed")
-    parser.add_argument("--ctd", type=int, default=0, help="0 - no ctd / 1 - ctd")
-    parser.add_argument("--render", type=int, default=0, help="0 - no render / 1 - render")
+    parser.add_argument("--ctd", type=int, default=0,
+                        help="0 - no ctd / 1 - ctd")
+    parser.add_argument("--render", type=int, default=0,
+                        help="0 - no render / 1 - render")
     parser.add_argument("--size", type=int, default=15, help="grid size")
-    parser.add_argument("--epsilon", type=float, default=0.05, help="error tolerance")
-    parser.add_argument("--delta", type=float, default=0.05, help="confidence delta (0.05 = 95% confidence)")
+    parser.add_argument("--epsilon", type=float,
+                        default=0.05, help="error tolerance")
+    parser.add_argument("--delta", type=float, default=0.05,
+                        help="confidence delta (0.05 = 95% confidence)")
     args = parser.parse_args()
 
     random.seed(args.seed)
@@ -229,6 +237,8 @@ if __name__ == "__main__":
     for i in range(args.rounds):
         seeds.append(random.randint(0, 1000000))
 
+    # 0 - random / 1 - stratified / 2 - MCTS
+    sampling = args.sampling
     # 0 - new framework / 1 - new framework w/ cache / 2 - old framework / 3 - RL
     method = args.method
     rounds = args.rounds
@@ -248,7 +258,8 @@ if __name__ == "__main__":
     all_ctd_success = 0
     all_ctd_triggered = 0
     for i in range(rounds):
-        step, intervention_count, rot_counts, check_times, fix_times, frogs_killed, ctd_success, ctd_triggered = run(method, seeds[i], ctd, horizon, size, epsilon, delta, render)
+        step, intervention_count, rot_counts, check_times, fix_times, frogs_killed, ctd_success, ctd_triggered = run(
+            sampling, method, seeds[i], ctd, horizon, size, epsilon, delta, render)
         all_step += step
         all_intervention_count += intervention_count
         all_rot_counts.extend(rot_counts)
@@ -268,20 +279,22 @@ if __name__ == "__main__":
                     count_neg += 1
             avg_rot = sum_rot / (len(all_rot_counts) - count_neg)
             max_rot = max(all_rot_counts)
-            #print(f"Average rot_checks: {avg_rot:.2f}, Max rot_checks: {max_rot:.2f}, Neg rot_checks: {count_neg}")
+            # print(f"Average rot_checks: {avg_rot:.2f}, Max rot_checks: {max_rot:.2f}, Neg rot_checks: {count_neg}")
         if all_check_times:
             avg_check = sum(all_check_times) / len(all_check_times)
             max_check = max(all_check_times)
-            #print(f"Average checking time: {avg_check:.4f}, Max checking time: {max_check:.4f}")
+            # print(f"Average checking time: {avg_check:.4f}, Max checking time: {max_check:.4f}")
     if all_fix_times and method < 3:
         avg_fix = sum(all_fix_times) / len(all_fix_times)
         max_fix = max(all_fix_times)
-        #print(f"Average fixing time: {avg_fix:.4f}, Max fixing time: {max_fix:.4f}")
-    #print(f"Steps: {all_step / rounds}, Interventions: {all_intervention_count / rounds}")
-    #print(f"Frogs killed: {all_frogs_killed / rounds}")
+        # print(f"Average fixing time: {avg_fix:.4f}, Max fixing time: {max_fix:.4f}")
+    # print(f"Steps: {all_step / rounds}, Interventions: {all_intervention_count / rounds}")
+    # print(f"Frogs killed: {all_frogs_killed / rounds}")
     if method == 3:
-        print(f"{all_step / rounds:.2f}, 0.00, 0.00, {all_frogs_killed / rounds:.2f}, {all_ctd_triggered / rounds:.2f}, {(1 - (all_ctd_success / rounds)) * (all_ctd_triggered / rounds):.2f}")
+        print(f"{all_step / rounds:.2f}, 0.00, 0.00, {all_frogs_killed / rounds:.2f}, {all_ctd_triggered /
+              rounds:.2f}, {(1 - (all_ctd_success / rounds)) * (all_ctd_triggered / rounds):.2f}")
     else:
-        print(f"{all_step / rounds:.2f}, {all_intervention_count / rounds:.2f}, {avg_fix * 1000:.2f}, {all_frogs_killed / rounds:.2f}, {all_ctd_triggered / rounds:.2f}, {(1 - (all_ctd_success / rounds)) * (all_ctd_triggered / rounds):.2f}")
-    #if ctd:
+        print(f"{all_step / rounds:.2f}, {all_intervention_count / rounds:.2f}, {avg_fix * 1000:.2f}, {all_frogs_killed /
+              rounds:.2f}, {all_ctd_triggered / rounds:.2f}, {(1 - (all_ctd_success / rounds)) * (all_ctd_triggered / rounds):.2f}")
+    # if ctd:
     #    print(f"ctd_success: {all_ctd_success / rounds}, ctd_triggered: {all_ctd_triggered / rounds}")
