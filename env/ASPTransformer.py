@@ -2,6 +2,7 @@ import clingo
 import time
 import random
 import numpy as np
+import math as math
 
 from env.dynamics import GardenerDynamics
 
@@ -13,7 +14,7 @@ class ASPTransformer:
       - variable atoms   (agent, grass_timer, lake_timer)
     """
 
-    def __init__(self, q_agent):
+    def __init__(self, q_agent, sampling):
         self._static = None
         self._dynamic = None
         self._state = None
@@ -30,7 +31,7 @@ class ASPTransformer:
         self._horizon = None
         self._frogs = []
         self._ctd = None
-
+        self._sampling = sampling
 
     def reset(self, ctd):
         self._state = None
@@ -43,7 +44,6 @@ class ASPTransformer:
         self._generate = None
         self._dynamic = None
         self._frogs.clear()
-
 
     def build_static(self, state, horizon) -> str:
         lines = []
@@ -150,12 +150,12 @@ class ASPTransformer:
         lines.append("")
         self._horizon = horizon
 
-        ## constant atoms: lakes
+        # constant atoms: lakes
         line = ""
         for i, (c, r) in enumerate(state.lakes):
             line += f"lake({c}, {r}, {i})."
         lines.append(line)
-        ## constant atoms: grass
+        # constant atoms: grass
         line = ""
         for i, (c, r) in enumerate(state.grass):
             line += f"grass({c}, {r}, {i})."
@@ -166,12 +166,12 @@ class ASPTransformer:
 
     def add_constraint(self, actions):
         line = ":-"
-        for i,a in enumerate(actions):
+        for i, a in enumerate(actions):
             line += f" action({a}, {i}),"
         line = line.removesuffix(",")
-        line+="."
+        line += "."
         if line not in self._constraints:
-            #print(f"Adding constraint: {line}")
+            # print(f"Adding constraint: {line}")
             self._constraints.insert(0, line)
             return False
         else:
@@ -195,7 +195,6 @@ class ASPTransformer:
         for i, c in enumerate(state.grass_timer):
             line += f"grass_timer({i}, {c+1}, 0)."
         lines.append(line)
-
 
         # frog timer
         for f in range(len(state.frog_timer)):
@@ -231,18 +230,21 @@ class ASPTransformer:
                         if i not in self._frogs and not self._state.dead_frogs[i]:
                             self._frogs.append(i)
 
-        self._rnd = {}
-        # frogs
-        for i in range(num_worlds):
-            self._rnd[i] = {}  # Initialize the world level
-            for f in self._frogs:
-                self._rnd[i][f] = {}  # Initialize the frog level
-                for t in range(horizon):
-                    self._rnd[i][f][t] = random.random()
+        if self._sampling == 0:
+            self._rnd = {}
+
+            # frogs
+            for i in range(num_worlds):
+                self._rnd[i] = {}  # Initialize the world level
+                for f in self._frogs:
+                    self._rnd[i][f] = {}  # Initialize the frog level
+                    for t in range(horizon):
+                        self._rnd[i][f][t] = random.random()
 
         done = []
         for f_i, (c_f, r_f) in enumerate(state.frogs):
-            if f_i not in self._frogs: continue
+            if f_i not in self._frogs:
+                continue
             c_min = c_f - horizon
             c_max = c_f + horizon
             r_min = r_f - horizon
@@ -257,10 +259,13 @@ class ASPTransformer:
                                 # here new code
                                 if (c, r) in self._lake_dict:
                                     for i, lake in enumerate(self._lake_dict[(c, r)]):
-                                        #todo make this dynamic
-                                        if i > 10: continue
-                                        lines.append(f"lake_action({c}, {r}, {lake[0]}, {lake[2]}).")
-                                        lines.append(f"lake_order({c}, {r}, {lake[0]}, {i}).")
+                                        # todo make this dynamic
+                                        if i > 10:
+                                            continue
+                                        lines.append(
+                                            f"lake_action({c}, {r}, {lake[0]}, {lake[2]}).")
+                                        lines.append(
+                                            f"lake_order({c}, {r}, {lake[0]}, {i}).")
                                 is_wall = np.any(
                                     np.all(state.walls == [c, r], axis=1))
                                 is_lake = np.any(
@@ -272,7 +277,8 @@ class ASPTransformer:
                                         if state.pos_actions[c, r, i] == 1:
                                             pos_actions.append(i)
                                     for i, action in enumerate(pos_actions):
-                                        lines.append(f"act_pos({c}, {r}, {action}, {i}, {len(pos_actions)}).")
+                                        lines.append(f"act_pos({c}, {r}, {action}, {
+                                                     i}, {len(pos_actions)}).")
 
         # agent window
         c_min = state.agent[0] - horizon
@@ -285,8 +291,9 @@ class ASPTransformer:
                 if dist <= horizon:
                     if (c, r) in self._lake_dict:
                         for i, lake in enumerate(self._lake_dict[(c, r)]):
-                            #todo make this dynamic
-                            if i > 10: continue
+                            # todo make this dynamic
+                            if i > 10:
+                                continue
                             lines.append(
                                 f"lake_action({c}, {r}, {lake[0]}, {lake[2]}).")
                             lines.append(
@@ -296,7 +303,8 @@ class ASPTransformer:
                     if (c, r) in self._grass_dict:
                         for i, grass in enumerate(self._grass_dict[(c, r)]):
                             # todo make this dynamic
-                            if i > 10: continue
+                            if i > 10:
+                                continue
                             lines.append(
                                 f"grass_order({c}, {r}, {grass[0]}, {i}).")
                             lines.append(
@@ -310,21 +318,20 @@ class ASPTransformer:
                     elif is_lake:
                         lines.append(f"lake({c}, {r}).")
 
-
         self._dynamic = "\n".join(lines)
         return "\n".join(lines)
-
 
     def call_clingo_generate(self, state, violations):
         lines = []
         dyn = self.build_dynamic(state)
-        #for constraint in self._constraints:
+        # for constraint in self._constraints:
         #    lines.append(constraint)
         if violations:
             # activate worlds here
             for i in violations:
-                for f, (c,r) in enumerate(state.frogs):
-                    if f not in self._frogs: continue
+                for f, (c, r) in enumerate(state.frogs):
+                    if f not in self._frogs:
+                        continue
                     lines.append(
                         f"frog({c}, {r}, {f}, 0, {i}).")
                     for t in range(self._horizon):
@@ -344,12 +351,13 @@ class ASPTransformer:
             with open("norms.lp", "r") as f:
                 norms = f.read()
         self._generate = clingo.Control()
-        self._generate.add("base", [], f"{self._static}\n{self._dynamic}\n{program}\n{common}\n{worlds}\n{dyn}\n{norms}")
+        self._generate.add("base", [], f"{self._static}\n{self._dynamic}\n{
+                           program}\n{common}\n{worlds}\n{dyn}\n{norms}")
         self._generate.ground([("base", [])], context=self)
         self._generate.solve(on_model=self.on_model)
         actions = [-1] * self._horizon
-        #todo what if latest model is none
-        #print(self._latest_model)
+        # todo what if latest model is none
+        # print(self._latest_model)
         for sym in self._latest_model:
             if sym.name == "action" and len(sym.arguments) == 2:
                 actions[sym.arguments[1].number] = sym.arguments[0].number
@@ -373,7 +381,8 @@ class ASPTransformer:
             with open("norms.lp", "r") as f:
                 norms = f.read()
         self._check = clingo.Control()
-        self._check.add("base", [], f"{self._static}\n{program}\n{dyn}\n{common}\n{norms}")
+        self._check.add("base", [], f"{self._static}\n{
+                        program}\n{dyn}\n{common}\n{norms}")
 
         # add frogs and agent
         lines = []
@@ -385,8 +394,9 @@ class ASPTransformer:
         for i, a in enumerate(actions):
             lines.append(f"action({a}, {i}).")
             done = []
-            for f_i, (c_f,r_f) in enumerate(state.frogs):
-                if f_i not in self._frogs: continue
+            for f_i, (c_f, r_f) in enumerate(state.frogs):
+                if f_i not in self._frogs:
+                    continue
                 c_min = c_f - self._horizon
                 c_max = c_f + self._horizon
                 r_min = r_f - self._horizon
@@ -394,32 +404,35 @@ class ASPTransformer:
                 for c in range(c_min, c_max + 1):
                     for r in range(r_min, r_max + 1):
                         dist = abs(c_f - c) + abs(r_f - r)
-                        if (c,r) not in done and dist < self._horizon:
-                            done.append((c,r))
+                        if (c, r) not in done and dist < self._horizon:
+                            done.append((c, r))
                             # here new code
                             if (c, r) in self._lake_dict:
                                 for j, lake in enumerate(
                                         self._lake_dict[(c, r)]):
-                                    #todo make this dynamic
-                                    if j > 10: continue
+                                    # todo make this dynamic
+                                    if j > 10:
+                                        continue
                                     lines.append(
                                         f"lake_action({c}, {r}, {lake[0]}, {lake[2]}).")
                                     lines.append(
                                         f"lake_order({c}, {r}, {lake[0]}, {j}).")
 
         for i in range(max_world):
-            if i in exclude_worlds: continue
-            for f, (c,r) in enumerate(state.frogs):
-                if f not in self._frogs: continue
+            if i in exclude_worlds:
+                continue
+            for f, (c, r) in enumerate(state.frogs):
+                if f not in self._frogs:
+                    continue
                 lines.append(f"frog({c}, {r}, {f}, 0, {i}).")
                 for t in range(self._horizon):
                     ran = self._rnd[i][f][t]
                     lines.append(f"f_rnd({f}, {t}, {i}, {int(ran * 100)}).")
 
-
         done = []
         for i_f, (c_f, r_f) in enumerate(state.frogs):
-            if i_f not in self._frogs: continue
+            if i_f not in self._frogs:
+                continue
             c_min = c_f - self._horizon
             c_max = c_f + self._horizon
             r_min = r_f - self._horizon
@@ -442,14 +455,15 @@ class ASPTransformer:
                                         if state.pos_actions[c, r, i] == 1:
                                             pos_actions.append(i)
                                     for i, action in enumerate(pos_actions):
-                                        lines.append(f"act_pos({c}, {r}, {action}, {i}, {len(pos_actions)}).")
+                                        lines.append(f"act_pos({c}, {r}, {action}, {
+                                                     i}, {len(pos_actions)}).")
 
         self._check.add("base", [], "\n".join(lines))
         self._check.ground([("base", [])], context=self)
         self._check.solve(on_model=self.on_model)
         violations = []
         rot = True
-        #print(self._latest_model)
+        # print(self._latest_model)
         for sym in self._latest_model:
             if sym.name == "norm_violation" and len(sym.arguments) == 1:
                 world = sym.arguments[0].number
@@ -457,6 +471,171 @@ class ASPTransformer:
                 if world > max_world - n_rot:
                     rot = False
         return violations, rot
+
+    def call_stratified_check(self, state, actions, sips, strata, epsilon, delta, alpha_beta):
+        self._latest_model = None
+        dyn = self.build_dynamic(state)
+        with open("check.lp", "r") as f:
+            program = f.read()
+        with open("common.lp", "r") as f:
+            common = f.read()
+        if self._ctd:
+            with open("norms-ctd.lp", "r") as f:
+                norms = f.read()
+        else:
+            with open("norms.lp", "r") as f:
+                norms = f.read()
+
+        loop = 0
+        means = {x: 0 for x in range(strata + 1)}
+        violations = []
+        while loop > -1:
+            loop += 1
+
+            self._check = clingo.Control()
+            self._check.add("base", [], f"{self._static}\n{
+                            program}\n{dyn}\n{common}\n{norms}")
+            # add frogs and agent
+            lines = []
+            lines.append(f"agent({state.agent[0]}, {state.agent[1]}, 0).")
+
+            for s in sips:
+                lines.append(f"ctd({sips[s][0]}, {s}, {sips[s][1]}).")
+
+            for i, a in enumerate(actions):
+                lines.append(f"action({a}, {i}).")
+                done = []
+                for f_i, (c_f, r_f) in enumerate(state.frogs):
+                    if f_i not in self._frogs:
+                        continue
+                    c_min = c_f - self._horizon
+                    c_max = c_f + self._horizon
+                    r_min = r_f - self._horizon
+                    r_max = r_f + self._horizon
+                    for c in range(c_min, c_max + 1):
+                        for r in range(r_min, r_max + 1):
+                            dist = abs(c_f - c) + abs(r_f - r)
+                            if (c, r) not in done and dist < self._horizon:
+                                done.append((c, r))
+                                # here new code
+                                if (c, r) in self._lake_dict:
+                                    for j, lake in enumerate(
+                                            self._lake_dict[(c, r)]):
+                                        # todo make this dynamic
+                                        if j > 10:
+                                            continue
+                                        lines.append(
+                                            f"lake_action({c}, {r}, {lake[0]}, {lake[2]}).")
+                                        lines.append(
+                                            f"lake_order({c}, {r}, {lake[0]}, {j}).")
+
+            self.populate_rnd_stratified(strata)
+
+            # for i in range((loop - 1) * strata, loop * strata):
+            for i in range(strata):
+                for f, (c, r) in enumerate(state.frogs):
+                    if f not in self._frogs:
+                        continue
+                    lines.append(f"frog({c}, {r}, {f}, 0, {i}).")
+                    for t in range(self._horizon):
+                        ran = self._rnd[i][f][t]
+                        lines.append(
+                            f"f_rnd({f}, {t}, {i}, {int(ran * 100)}).")
+
+            done = []
+            for i_f, (c_f, r_f) in enumerate(state.frogs):
+                if i_f not in self._frogs:
+                    continue
+                c_min = c_f - self._horizon
+                c_max = c_f + self._horizon
+                r_min = r_f - self._horizon
+                r_max = r_f + self._horizon
+                for c in range(c_min, c_max + 1):
+                    if 0 <= c < state.size:
+                        for r in range(r_min, r_max + 1):
+                            if 0 <= r < state.size:
+                                dist = abs(c_f - c) + abs(r_f - r)
+                                if (c, r) not in done and dist < self._horizon:
+                                    done.append((c, r))
+                                    is_wall = np.any(
+                                        np.all(state.walls == [c, r], axis=1))
+                                    is_lake = np.any(
+                                        np.all(state.lakes == [c, r], axis=1))
+                                    if not is_wall and not is_lake:
+                                        pos_actions = []
+                                        # Use the precomputed pos_actions array from state
+                                        for i in range(4):
+                                            if state.pos_actions[c, r, i] == 1:
+                                                pos_actions.append(i)
+                                        for i, action in enumerate(pos_actions):
+                                            lines.append(f"act_pos({c}, {r}, {action}, {
+                                                i}, {len(pos_actions)}).")
+
+            self._check.add("base", [], "\n".join(lines))
+            self._check.ground([("base", [])], context=self)
+            self._check.solve(on_model=self.on_model)
+            # print(self._latest_model)
+            loopViolations = 0
+            for sym in self._latest_model:
+                if sym.name == "norm_violation" and len(sym.arguments) == 1:
+                    world = sym.arguments[0].number
+                    violations.append(world)
+                    loopViolations += 1
+
+            means[loopViolations] += 1
+            # print(loop)
+
+            if loop >= 30:
+                match self.sprt_check(means, strata, epsilon, delta, alpha_beta):
+                    case -1:
+                        return violations, False
+                    case 0:
+                        # if (loop * strata > max_worlds):
+                        #    return violations, False
+                        continue
+                    case 1:
+                        return violations, True
+
+    def populate_rnd_stratified(self, strata):
+        self._rnd = {i: {f: {} for f in self._frogs}
+                     for i in range(strata)}
+        for f in self._frogs:
+            cells = list(range(strata))
+            for t in range(self._horizon):
+                random.shuffle(cells)
+                for i in range(strata):
+                    self._rnd[i][f][t] = (i + random.random()) / strata
+
+    def sprt_check(self, means, strata, epsilon, delta, alpha_beta):
+        # print("sprt_check")
+        mean_numerator = 0.0
+        variance_numerator = 0.0
+        denominator = 0.0
+
+        for i, v in means.items():
+            mean_numerator += (i * v) / strata
+            variance_numerator += ((i / strata)**2) * v
+            denominator += v
+
+        mean = mean_numerator / denominator
+        boundary_value = mean - epsilon - delta
+
+        variance = ((variance_numerator / denominator) -
+                    mean**2) / (denominator / strata)
+        error_bounds = math.log((1 - alpha_beta) / alpha_beta)
+        reference_value = variance / (2 * delta) * error_bounds
+        # print(means)
+        # print("mean: ", mean)
+        # print("boundary_value: ", boundary_value)
+        # print("reference_value accept: ",
+        #      boundary_value, " < ", -reference_value)
+        # print("reference_value reject: ", boundary_value, " > ", reference_value)
+        if boundary_value < -reference_value:
+            return 1
+        elif boundary_value > reference_value:
+            return -1
+        else:
+            return 0
 
     def compute_reward_new(self, lawn, lake, dist_lawn, dist_lake):
         lawn = lawn.number
@@ -476,7 +655,6 @@ class ASPTransformer:
         }
         q_value = self._q_agent.getQValueFromFeatures(features)
         return clingo.Number(int(q_value * 10000))
-
 
     def on_model(self, m):
         self._latest_model = m.symbols(shown=True)

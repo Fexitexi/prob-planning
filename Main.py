@@ -15,7 +15,7 @@ gym.envs.registration.register(
 )
 
 
-def run(strata=1, sampling=0, method=0, seed=None, ctd=False, horizon=3, size=15, epsilon=0.05, delta=0.05, render=False):
+def run(strata=1, sampling=0, method=0, seed=None, ctd=False, horizon=3, size=15, epsilon=0.05, delta=0.05, indifference=0.005, render=False):
     global env
     env = gym.make("GardenerEnv-v0", size=size)
     gar = env.unwrapped
@@ -29,7 +29,7 @@ def run(strata=1, sampling=0, method=0, seed=None, ctd=False, horizon=3, size=15
 
     # load the pre-trained weights
     q_agent = GardenerQAgent()
-    asp_transformer = ASPTransformer(q_agent, sampling, strata)
+    asp_transformer = ASPTransformer(q_agent, sampling)
     q_agent.stopLearning()
     q_agent.load_weights("weights.pkl")
 
@@ -71,11 +71,16 @@ def run(strata=1, sampling=0, method=0, seed=None, ctd=False, horizon=3, size=15
             asp_transformer.build_dynamic_worlds(state, n_asp, horizon, sips)
             _, executed_actions = gar.simulate_samples(horizon, q_agent,
                                                        actions)
-            new_violations, rot = asp_transformer.call_clingo_check(state,
-                                                                    executed_actions,
-                                                                    [], n_rot,
-                                                                    rot_count,
-                                                                    sips)
+            match sampling:
+                case 0:
+                    new_violations, rot = asp_transformer.call_clingo_check(state,
+                                                                            executed_actions,
+                                                                            [], n_rot,
+                                                                            rot_count,
+                                                                            sips)
+                case 1:
+                    new_violations, rot = asp_transformer.call_stratified_check(
+                        state, executed_actions, sips, strata, epsilon, indifference, delta)
             end_time_check = time.time()
             check_times.append(end_time_check - start_time_check)
             if rot:
@@ -112,12 +117,16 @@ def run(strata=1, sampling=0, method=0, seed=None, ctd=False, horizon=3, size=15
                             else:
                                 action = policy_fix.pop(0)
                             break
-                    new_violations, rot = asp_transformer.call_clingo_check(
-                        state,
-                        policy_fix,
-                        violations,
-                        n_rot,
-                        rot_count, sips)
+                    match sampling:
+                        case 0:
+                            new_violations, rot = asp_transformer.call_clingo_check(state,
+                                                                                    policy_fix,
+                                                                                    violations, n_rot,
+                                                                                    rot_count,
+                                                                                    sips)
+                        case 1:
+                            new_violations, rot = asp_transformer.call_stratified_check(
+                                state, policy_fix, sips, strata, epsilon, indifference, delta)
                     if rot:
                         # cache
                         if method == 1:
@@ -211,6 +220,8 @@ def run(strata=1, sampling=0, method=0, seed=None, ctd=False, horizon=3, size=15
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--indifference", type=float, default=0.005,
+                        help="specifies the radius of the indifference interval")
     parser.add_argument("--strata", type=int, default=1,
                         help="specifies the amount of trajectories within one batch for sampling=1")
     parser.add_argument("--sampling", type=int, default=0,
@@ -237,6 +248,8 @@ if __name__ == "__main__":
     for i in range(args.rounds):
         seeds.append(random.randint(0, 1000000))
 
+    indifference = args.indifference
+    strata = args.strata
     # 0 - random / 1 - stratified / 2 - MCTS
     sampling = args.sampling
     # 0 - new framework / 1 - new framework w/ cache / 2 - old framework / 3 - RL
@@ -259,7 +272,7 @@ if __name__ == "__main__":
     all_ctd_triggered = 0
     for i in range(rounds):
         step, intervention_count, rot_counts, check_times, fix_times, frogs_killed, ctd_success, ctd_triggered = run(
-            sampling, method, seeds[i], ctd, horizon, size, epsilon, delta, render)
+            strata, sampling, method, seeds[i], ctd, horizon, size, epsilon, delta, indifference, render)
         all_step += step
         all_intervention_count += intervention_count
         all_rot_counts.extend(rot_counts)
@@ -279,17 +292,21 @@ if __name__ == "__main__":
                     count_neg += 1
             avg_rot = sum_rot / (len(all_rot_counts) - count_neg)
             max_rot = max(all_rot_counts)
-            # print(f"Average rot_checks: {avg_rot:.2f}, Max rot_checks: {max_rot:.2f}, Neg rot_checks: {count_neg}")
+            print(f"Average rot_checks: {avg_rot:.2f}, Max rot_checks: {
+                  max_rot:.2f}, Neg rot_checks: {count_neg}")
         if all_check_times:
             avg_check = sum(all_check_times) / len(all_check_times)
             max_check = max(all_check_times)
-            # print(f"Average checking time: {avg_check:.4f}, Max checking time: {max_check:.4f}")
+            print(f"Average checking time: {
+                  avg_check:.4f}, Max checking time: {max_check:.4f}")
     if all_fix_times and method < 3:
         avg_fix = sum(all_fix_times) / len(all_fix_times)
         max_fix = max(all_fix_times)
-        # print(f"Average fixing time: {avg_fix:.4f}, Max fixing time: {max_fix:.4f}")
-    # print(f"Steps: {all_step / rounds}, Interventions: {all_intervention_count / rounds}")
-    # print(f"Frogs killed: {all_frogs_killed / rounds}")
+        print(f"Average fixing time: {
+              avg_fix:.4f}, Max fixing time: {max_fix:.4f}")
+    print(f"Steps: {all_step /
+          rounds}, Interventions: {all_intervention_count / rounds}")
+    print(f"Frogs killed: {all_frogs_killed / rounds}")
     if method == 3:
         print(f"{all_step / rounds:.2f}, 0.00, 0.00, {all_frogs_killed / rounds:.2f}, {all_ctd_triggered /
               rounds:.2f}, {(1 - (all_ctd_success / rounds)) * (all_ctd_triggered / rounds):.2f}")
