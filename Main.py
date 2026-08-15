@@ -1,12 +1,15 @@
-import math
 import argparse
-import gymnasium as gym
-import time
 import random
+import time
 
+import gymnasium as gym
+
+from config import Config, Method, SamplingMode
 from env.ASPTransformer import ASPTransformer
 from env.GardenerQAgent import GardenerQAgent
+from env.MCTSNode import MCTSNode
 from env.old.ClingoHelper import ClingoHelperOld
+from env.simulation_state import SimulationState
 from env.state import ObservationState
 
 gym.envs.registration.register(
@@ -15,21 +18,14 @@ gym.envs.registration.register(
 )
 
 
-def run(strata=1, sampling=0, method=0, seed=None, ctd=False, horizon=3, size=15, epsilon=0.05, delta=0.05, indifference=0.005, render=False):
+def run(config: Config, seed: int | None = None):
     global env
-    env = gym.make("GardenerEnv-v0", size=size)
+    env = gym.make("GardenerEnv-v0", size=config.size)
     gar = env.unwrapped
-
-    # parameter
-    n_actions = 5
-    n_rot = math.ceil(math.log(delta)/math.log(1-epsilon))
-    n_asp = math.ceil((1 / (2 * math.pow(epsilon, 2))) * math.log(
-        (2 * math.pow(n_actions, horizon)) / delta))
-    # print(f"Number of asp: {n_asp}")
 
     # load the pre-trained weights
     q_agent = GardenerQAgent()
-    asp_transformer = ASPTransformer(q_agent, sampling)
+    asp_transformer = ASPTransformer(q_agent, config.sampling)
     q_agent.stopLearning()
     q_agent.load_weights("weights.pkl")
 
@@ -43,10 +39,11 @@ def run(strata=1, sampling=0, method=0, seed=None, ctd=False, horizon=3, size=15
     done = False
 
     state = ObservationState.from_obs(obs)
-    asp_transformer.build_static(state, horizon)
+    asp_transformer.build_static(state, config.horizon)
     lake_full = state.lakes_full
     actions = []
     step = 0
+    full_times = []
     check_times = []
     fix_times = []
     gen_count = 0
@@ -59,28 +56,54 @@ def run(strata=1, sampling=0, method=0, seed=None, ctd=False, horizon=3, size=15
     intervention_count = 0
 
     # old
-    clingoHelperOld = ClingoHelperOld(state, q_agent, horizon + 1, 10)
+    clingoHelperOld = ClingoHelperOld(state, q_agent, config.horizon + 1, 10)
     clingoHelperOld.setup()
 
+    # cache frequently accessed config values for the hot loop
+    method = config.method
+    sampling_mode = config.sampling.mode
+    horizon = config.horizon
+    use_new_framework = method in (Method.NEW, Method.NEW_CACHE)
+
     while not done:
+        start_full_time = time.time()
         step += 1
         rot_count = 1
-        if method < 2:
+        if use_new_framework:
             start_time_check = time.time()
-            asp_transformer.reset(ctd)
-            asp_transformer.build_dynamic_worlds(state, n_asp, horizon, sips)
-            _, executed_actions = gar.simulate_samples(horizon, q_agent,
-                                                       actions)
-            match sampling:
-                case 0:
-                    new_violations, rot = asp_transformer.call_clingo_check(state,
-                                                                            executed_actions,
-                                                                            [], n_rot,
-                                                                            rot_count,
-                                                                            sips)
-                case 1:
+            asp_transformer.reset(config.ctd)
+            asp_transformer.build_dynamic_worlds(state, sips)
+            _, executed_actions = gar.simulate_samples(horizon, q_agent, actions)
+            match sampling_mode:
+                case SamplingMode.RANDOM:
+                    new_violations, rot = asp_transformer.call_clingo_check(
+                        state, executed_actions, [], rot_count, sips
+                    )
+                case SamplingMode.STRATIFIED:
                     new_violations, rot = asp_transformer.call_stratified_check(
-                        state, executed_actions, sips, strata, epsilon, indifference, delta)
+                        state, executed_actions, sips
+                    )
+                case SamplingMode.MCTS:
+                    sim_state = SimulationState.from_state(gar._state, config.ctd)
+                    node = MCTSNode(
+                        sim_state,
+                        None,
+                        sim_state.get_possible_actions_with_probabilities(
+                            executed_actions[0]
+                        ),
+                    )
+                    new_violations, rot = node.check_MCTS(
+                        executed_actions,
+                        config.horizon,
+                        config.sampling.confidence,
+                        config.sampling.indifference,
+                        config.sampling.max_visits,
+                    )
+                    rot = rot <= config.sampling.delta
+                case _:
+                    raise NotImplementedError(
+                        f"Sampling mode {sampling_mode!r} is not wired in Main.py"
+                    )
             end_time_check = time.time()
             check_times.append(end_time_check - start_time_check)
             if rot:
@@ -99,8 +122,7 @@ def run(strata=1, sampling=0, method=0, seed=None, ctd=False, horizon=3, size=15
                 fixing_count += 1
                 while True:
                     # print(rot_count)
-                    policy_fix = asp_transformer.call_clingo_generate(
-                        state, violations)
+                    policy_fix = asp_transformer.call_clingo_generate(state, violations)
                     gen_count += 1
                     if rot_count != -1:
                         if policy_fix not in tested_policies:
@@ -111,25 +133,47 @@ def run(strata=1, sampling=0, method=0, seed=None, ctd=False, horizon=3, size=15
                     else:
                         if policy_fix in tested_policies:
                             # cache
-                            if method == 1:
+                            if method == Method.NEW_CACHE:
                                 actions = policy_fix
                                 action = actions.pop(0)
                             else:
                                 action = policy_fix.pop(0)
                             break
-                    match sampling:
-                        case 0:
-                            new_violations, rot = asp_transformer.call_clingo_check(state,
-                                                                                    policy_fix,
-                                                                                    violations, n_rot,
-                                                                                    rot_count,
-                                                                                    sips)
-                        case 1:
+                    match sampling_mode:
+                        case SamplingMode.RANDOM:
+                            new_violations, rot = asp_transformer.call_clingo_check(
+                                state, policy_fix, violations, rot_count, sips
+                            )
+                        case SamplingMode.STRATIFIED:
                             new_violations, rot = asp_transformer.call_stratified_check(
-                                state, policy_fix, sips, strata, epsilon, indifference, delta)
+                                state, policy_fix, sips
+                            )
+                        case SamplingMode.MCTS:
+                            sim_state = SimulationState.from_state(
+                                gar._state, config.ctd
+                            )
+                            node = MCTSNode(
+                                sim_state,
+                                None,
+                                sim_state.get_possible_actions_with_probabilities(
+                                    policy_fix[0]
+                                ),
+                            )
+                            new_violations, rot = node.check_MCTS(
+                                policy_fix,
+                                config.horizon,
+                                config.sampling.confidence,
+                                config.sampling.indifference,
+                                config.sampling.max_visits,
+                            )
+                            rot = rot <= config.sampling.delta
+                        case _:
+                            raise NotImplementedError(
+                                f"Sampling mode {sampling_mode!r} is not wired in Main.py"
+                            )
                     if rot:
                         # cache
-                        if method == 1:
+                        if method == Method.NEW_CACHE:
                             actions = policy_fix
                             action = actions.pop(0)
                         else:
@@ -145,7 +189,7 @@ def run(strata=1, sampling=0, method=0, seed=None, ctd=False, horizon=3, size=15
             if action not in best_actions:
                 intervention_count += 1
             rot_counts.append(rot_count)
-        elif method == 2:
+        elif method == Method.OLD:
             # OLD METHOD EXECUTION
             start_time_gen = time.time()
             best_actions = q_agent.getBestActions(state)
@@ -153,7 +197,7 @@ def run(strata=1, sampling=0, method=0, seed=None, ctd=False, horizon=3, size=15
             if action not in best_actions:
                 intervention_count += 1
             fix_times.append(time.time() - start_time_gen)
-        elif method == 3:
+        elif method == Method.RL:
             action = q_agent.getAction(state)
 
         obs, reward, terminated, truncated, info = env.step(action)
@@ -162,8 +206,10 @@ def run(strata=1, sampling=0, method=0, seed=None, ctd=False, horizon=3, size=15
         # add this to the environment
         remove = []
         for s in sips:
-            if state.agent[0] == state.frogs[sips[s][0]][0] and state.agent[
-                    1] == state.frogs[sips[s][0]][1]:
+            if (
+                state.agent[0] == state.frogs[sips[s][0]][0]
+                and state.agent[1] == state.frogs[sips[s][0]][1]
+            ):
                 remove.append(s)
                 ctd_success += 1
                 msg = "CDT SUCCESS!"
@@ -182,14 +228,25 @@ def run(strata=1, sampling=0, method=0, seed=None, ctd=False, horizon=3, size=15
                 for f, (c, r) in enumerate(state.frogs):
                     prox = False
                     if not state.dead_frogs[f]:
-                        if abs(state.lakes[lake][0] - c) + abs(
-                                state.lakes[lake][1] - r) == 1:
+                        if (
+                            abs(state.lakes[lake][0] - c)
+                            + abs(state.lakes[lake][1] - r)
+                            == 1
+                        ):
                             prox = True
-                        elif abs(state.lakes[lake][0] - c) + abs(
-                                state.lakes[lake][1] - r) == 2 and abs(state.lakes[lake][0] - c) == 1:
+                        elif (
+                            abs(state.lakes[lake][0] - c)
+                            + abs(state.lakes[lake][1] - r)
+                            == 2
+                            and abs(state.lakes[lake][0] - c) == 1
+                        ):
                             prox = True
-                        elif abs(state.lakes[lake][0] - c) + abs(
-                                state.lakes[lake][1] - r) == 2 and abs(state.lakes[lake][1] - r) == 1:
+                        elif (
+                            abs(state.lakes[lake][0] - c)
+                            + abs(state.lakes[lake][1] - r)
+                            == 2
+                            and abs(state.lakes[lake][1] - r) == 1
+                        ):
                             prox = True
                     if prox:
                         # print(
@@ -200,9 +257,11 @@ def run(strata=1, sampling=0, method=0, seed=None, ctd=False, horizon=3, size=15
         # for visualization purposes
         # sleep = max(0, 0.1)
         # time.sleep(sleep)
-        if render:
+        if config.render:
             env.render()
         done = terminated or truncated
+        end_full_time = time.time()
+        full_times.append(end_full_time - start_full_time)
 
     ctd_triggered = ctd_success + ctd_failure
     if ctd_triggered > 0:
@@ -211,77 +270,105 @@ def run(strata=1, sampling=0, method=0, seed=None, ctd=False, horizon=3, size=15
         ctd_success = 1
 
     frogs_killed = state.dead_frogs.sum()
-    if ctd:
-        frogs_killed -= (ctd_success * frogs_killed)
+    if config.ctd:
+        frogs_killed -= ctd_success * frogs_killed
 
     env.close()
-    return step, intervention_count, rot_counts, check_times, fix_times, frogs_killed, ctd_success, ctd_triggered
+    return (
+        step,
+        intervention_count,
+        rot_counts,
+        check_times,
+        fix_times,
+        full_times,
+        frogs_killed,
+        ctd_success,
+        ctd_triggered,
+    )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--indifference", type=float, default=0.005,
-                        help="specifies the radius of the indifference interval")
-    parser.add_argument("--strata", type=int, default=1,
-                        help="specifies the amount of trajectories within one batch for sampling=1")
-    parser.add_argument("--sampling", type=int, default=0,
-                        help="0 - random / 1 - stratified / 2 - MCTS")
-    parser.add_argument("--method", type=int, default=0,
-                        help="0 - new framework / 1 - new framework w/ cache / 2 - old framework / 3 - RL")
+    parser.add_argument(
+        "--indifference",
+        type=float,
+        default=0.005,
+        help="specifies the radius of the indifference interval",
+    )
+    parser.add_argument(
+        "--strata",
+        type=int,
+        default=1,
+        help="specifies the amount of trajectories within one batch for sampling=1",
+    )
+    parser.add_argument(
+        "--sampling", type=int, default=0, help="0 - random / 1 - stratified / 2 - MCTS"
+    )
+    parser.add_argument(
+        "--method",
+        type=int,
+        default=0,
+        help="0 - new framework / 1 - new framework w/ cache / 2 - old framework / 3 - RL",
+    )
     parser.add_argument("--horizon", type=int, default=3, help="Horizon")
-    parser.add_argument("--rounds", type=int, default=10,
-                        help="Number of rounds")
+    parser.add_argument("--rounds", type=int, default=10, help="Number of rounds")
     parser.add_argument("--seed", type=int, default=42, help="Seed")
-    parser.add_argument("--ctd", type=int, default=0,
-                        help="0 - no ctd / 1 - ctd")
-    parser.add_argument("--render", type=int, default=0,
-                        help="0 - no render / 1 - render")
+    parser.add_argument(
+        "--ctd", type=int, default=0, choices=[0, 1], help="0 - no ctd / 1 - ctd"
+    )
+    parser.add_argument(
+        "--render",
+        type=int,
+        default=0,
+        choices=[0, 1],
+        help="0 - no render / 1 - render",
+    )
     parser.add_argument("--size", type=int, default=15, help="grid size")
-    parser.add_argument("--epsilon", type=float,
-                        default=0.05, help="error tolerance")
-    parser.add_argument("--delta", type=float, default=0.05,
-                        help="confidence delta (0.05 = 95% confidence)")
+    parser.add_argument("--epsilon", type=float, default=0.05, help="error tolerance")
+    parser.add_argument(
+        "--delta",
+        type=float,
+        default=0.05,
+        help="confidence delta (0.05 = 95% confidence)",
+    )
     args = parser.parse_args()
 
-    random.seed(args.seed)
-    seeds = []
-    for i in range(args.rounds):
-        seeds.append(random.randint(0, 1000000))
+    config = Config.from_args(args)
 
-    indifference = args.indifference
-    strata = args.strata
-    # 0 - random / 1 - stratified / 2 - MCTS
-    sampling = args.sampling
-    # 0 - new framework / 1 - new framework w/ cache / 2 - old framework / 3 - RL
-    method = args.method
-    rounds = args.rounds
-    ctd = args.ctd
-    horizon = args.horizon
-    render = args.render
-    size = args.size
-    epsilon = args.epsilon
-    delta = args.delta
+    random.seed(config.seed)
+    seeds = [random.randint(0, 1000000) for _ in range(config.rounds)]
 
     all_step = 0
     all_intervention_count = 0
     all_rot_counts = []
     all_check_times = []
     all_fix_times = []
+    all_full_times = []
     all_frogs_killed = 0
     all_ctd_success = 0
     all_ctd_triggered = 0
-    for i in range(rounds):
-        step, intervention_count, rot_counts, check_times, fix_times, frogs_killed, ctd_success, ctd_triggered = run(
-            strata, sampling, method, seeds[i], ctd, horizon, size, epsilon, delta, indifference, render)
+    for i in range(config.rounds):
+        (
+            step,
+            intervention_count,
+            rot_counts,
+            check_times,
+            fix_times,
+            full_times,
+            frogs_killed,
+            ctd_success,
+            ctd_triggered,
+        ) = run(config, seeds[i])
         all_step += step
         all_intervention_count += intervention_count
         all_rot_counts.extend(rot_counts)
         all_check_times.extend(check_times)
         all_fix_times.extend(fix_times)
+        all_full_times.extend(full_times)
         all_frogs_killed += frogs_killed
         all_ctd_success += ctd_success
         all_ctd_triggered += ctd_triggered
-    if method < 2:
+    if config.method in (Method.NEW, Method.NEW_CACHE):
         if all_rot_counts:
             sum_rot = 0
             count_neg = 0
@@ -292,26 +379,50 @@ if __name__ == "__main__":
                     count_neg += 1
             avg_rot = sum_rot / (len(all_rot_counts) - count_neg)
             max_rot = max(all_rot_counts)
-            print(f"Average rot_checks: {avg_rot:.2f}, Max rot_checks: {
-                  max_rot:.2f}, Neg rot_checks: {count_neg}")
+            print(
+                f"Average rot_checks: {avg_rot:.2f}, Max rot_checks: {
+                    max_rot:.2f}, Neg rot_checks: {count_neg}"
+            )
         if all_check_times:
             avg_check = sum(all_check_times) / len(all_check_times)
             max_check = max(all_check_times)
-            print(f"Average checking time: {
-                  avg_check:.4f}, Max checking time: {max_check:.4f}")
-    if all_fix_times and method < 3:
+            print(
+                f"Average checking time: {avg_check:.4f}, Max checking time: {
+                    max_check:.4f}"
+            )
+    if all_fix_times and config.method != Method.RL:
         avg_fix = sum(all_fix_times) / len(all_fix_times)
         max_fix = max(all_fix_times)
-        print(f"Average fixing time: {
-              avg_fix:.4f}, Max fixing time: {max_fix:.4f}")
-    print(f"Steps: {all_step /
-          rounds}, Interventions: {all_intervention_count / rounds}")
-    print(f"Frogs killed: {all_frogs_killed / rounds}")
-    if method == 3:
-        print(f"{all_step / rounds:.2f}, 0.00, 0.00, {all_frogs_killed / rounds:.2f}, {all_ctd_triggered /
-              rounds:.2f}, {(1 - (all_ctd_success / rounds)) * (all_ctd_triggered / rounds):.2f}")
+        print(f"Average fixing time: {avg_fix:.4f}, Max fixing time: {max_fix:.4f}")
+    if all_full_times and config.method != Method.RL:
+        avg_full = sum(all_full_times) / len(all_full_times)
+        max_full = max(all_full_times)
+        print(
+            f"Average time to compute step: {avg_full:.4f}, Max time to compute step: {
+                max_full:.4f}"
+        )
+    print(
+        f"Steps: {all_step / config.rounds}, Interventions: {
+            all_intervention_count / config.rounds
+        }"
+    )
+    print(f"Frogs killed: {all_frogs_killed / config.rounds}")
+    if config.method == Method.RL:
+        print(
+            f"{all_step / config.rounds:.2f}, 0.00, 0.00, {
+                all_frogs_killed / config.rounds:.2f}, {
+                all_ctd_triggered / config.rounds:.2f}, {
+                (1 - (all_ctd_success / config.rounds))
+                * (all_ctd_triggered / config.rounds):.2f}"
+        )
     else:
-        print(f"{all_step / rounds:.2f}, {all_intervention_count / rounds:.2f}, {avg_fix * 1000:.2f}, {all_frogs_killed /
-              rounds:.2f}, {all_ctd_triggered / rounds:.2f}, {(1 - (all_ctd_success / rounds)) * (all_ctd_triggered / rounds):.2f}")
-    # if ctd:
-    #    print(f"ctd_success: {all_ctd_success / rounds}, ctd_triggered: {all_ctd_triggered / rounds}")
+        print(
+            f"{all_step / config.rounds:.2f}, {
+                all_intervention_count / config.rounds:.2f}, {avg_fix * 1000:.2f}, {
+                all_frogs_killed / config.rounds:.2f}, {
+                all_ctd_triggered / config.rounds:.2f}, {
+                (1 - (all_ctd_success / config.rounds))
+                * (all_ctd_triggered / config.rounds):.2f}"
+        )
+    # if config.ctd:
+    #    print(f"ctd_success: {all_ctd_success / config.rounds}, ctd_triggered: {all_ctd_triggered / config.rounds}")
