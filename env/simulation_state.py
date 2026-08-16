@@ -11,6 +11,8 @@ class SimulationState:
     PREFERENCE_WEIGHT: ClassVar[float] = 0.7
     agent: np.ndarray  # [X, Y]
     frogs: np.ndarray  # [[X, Y], [X, Y]]
+    dead_frogs: np.ndarray
+    captured_frogs: np.ndarray
     lakes: np.ndarray  # [[X, Y], [X, Y]]
     lakes_full: np.ndarray  # [True/False, True/False]
     lake_timer: np.ndarray  # [0, 1, 2]
@@ -22,11 +24,14 @@ class SimulationState:
     lake_action_grid: np.ndarray
     size: int
     ctd: bool = False
+    violation: bool = False
 
     def __post_init__(self):
         arrays = (
             self.agent,
             self.frogs,
+            self.dead_frogs,
+            self.captured_frogs,
             self.lakes,
             self.lakes_full,
             self.lake_timer,
@@ -65,14 +70,14 @@ class SimulationState:
         for i, frog in enumerate(self.frogs):
             frog_actions = {}
             # skip stunned frogs
-            if self.frog_timer[i] > 0:
+            if self.frog_timer[i] > 0 or self.captured_frogs[i] or self.dead_frogs[i]:
                 possible = {k + (4,): v for k, v in possible.items()}
                 continue
 
             preferred_dir, other_dirs = self.get_frog_actions(frog)
 
             if preferred_dir is not None and other_dirs:
-                # common path, preferred = 70%, other options share the 30%
+                # common paviolation, preferred = 70%, other options share the 30%
                 frog_actions[preferred_dir] = SimulationState.PREFERENCE_WEIGHT
                 other_prob = (1.0 - SimulationState.PREFERENCE_WEIGHT) / len(other_dirs)
                 for d in other_dirs:
@@ -136,8 +141,23 @@ class SimulationState:
             updates["frogs"] = state.frogs.copy() + [
                 dynamics._action_to_direction[x] for x in action[1:]
             ]
+        else:
+            updates["frogs"] = state.frogs.copy()
 
-        agent_empties = np.abs(state.agent - state.lakes).sum(axis=1) & (
+        updates["violation"] = replace(state, **updates).hasViolation()
+
+        same_pos = (updates["agent"] == updates["frogs"]).all(axis=-1)
+        updates["captured_frogs"] = (
+            same_pos & (state.frog_timer > 0) & np.logical_not(state.dead_frogs)
+        ) | state.captured_frogs
+
+        updates["dead_frogs"] = (
+            same_pos & np.logical_not(updates["captured_frogs"])
+        ) | state.dead_frogs
+
+        # A lake is emptied only if the agent is orthogonally adjacent to it
+        # *after* moving and the lake was full before this step.
+        agent_empties = (np.abs(updates["agent"] - state.lakes).sum(axis=1) == 1) & (
             state.lake_timer == 0
         )
         updates["lake_timer"] = np.where(
@@ -145,7 +165,9 @@ class SimulationState:
         )
         updates["lakes_full"] = updates["lake_timer"] == 0
 
-        diff_frogs = np.abs(state.frogs[:, None, :] - state.lakes[None, :, :])
+        # Stun frogs that are adjacent to a lake that was just emptied.
+        # Use the new frog positions after their actions.
+        diff_frogs = np.abs(updates["frogs"][:, None, :] - state.lakes[None, :, :])
         near_lake = diff_frogs.max(axis=2) == 1
         near_emptied_lake = near_lake & agent_empties[None, :]
         frog_near_emptied_lake = near_emptied_lake.any(axis=1)
@@ -157,7 +179,13 @@ class SimulationState:
         return replace(state, **updates)
 
     def hasViolation(self):
-        if np.any(np.all(self.agent == self.frogs, axis=1)):
+        # A collision is a violation if the agent occupies the same cell as a
+        # frog that was alive (not dead/captured) *before* the action that led
+        # to this state. This lets the MCTS detect violations on the state
+        # produced by apply_action, even though that method marks the frog as
+        # dead/captured.
+        active = np.logical_not(self.dead_frogs | self.captured_frogs)
+        if np.any(np.all(self.agent == self.frogs, axis=1) & active):
             return True
 
         if self.ctd:
@@ -167,8 +195,13 @@ class SimulationState:
             if not agent_orthogonal.any():
                 return False
 
+            # For CTD, use current dead/captured status: a frog that is already
+            # dead or captured cannot trigger a future-duty violation.
+            active_frogs = np.logical_not(self.dead_frogs | self.captured_frogs)
             diff_frogs = np.abs(self.frogs[:, None, :] - self.lakes[None, :, :])
-            frog_near_lake = (diff_frogs.max(axis=2) == 1).any(axis=0)
+            frog_near_lake = (
+                (diff_frogs.max(axis=2) == 1) & active_frogs[:, None]
+            ).any(axis=0)
 
             combined_per_lake = agent_orthogonal & frog_near_lake & self.lakes_full
             return combined_per_lake.any()
@@ -193,6 +226,8 @@ class SimulationState:
         return SimulationState(
             agent=state.agent.copy(),
             frogs=state.frogs.copy(),
+            dead_frogs=state.dead_frogs.copy(),
+            captured_frogs=state.capt_frogs.copy(),
             lakes=state.lakes.copy(),
             lakes_full=state.lakes_full.copy(),
             lake_timer=state.lake_timer.copy(),
@@ -206,6 +241,7 @@ class SimulationState:
             ),
             size=state.size,
             ctd=ctd,
+            violation=False,
         )
 
     def fast_clone(self):

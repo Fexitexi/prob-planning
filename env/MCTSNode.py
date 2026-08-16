@@ -53,7 +53,7 @@ class MCTSNode:
 
                     # process new node
                     nodeSequence.append(node)
-                    result += 1 if node.state.hasViolation() else 0
+                    result += 1 if node.state.violation else 0
                 else:
                     # expand
                     newState = SimulationState.apply_action(node.state, selectedAction)
@@ -85,7 +85,6 @@ class MCTSNode:
 
             # update running violation probability
             outcome = 1 if result > 0 else 0
-            oldRunningProbability = runningProbability
             runningProbability = (1 / self.visitCount) * outcome * weight + (
                 (self.visitCount - 1) / self.visitCount
             ) * runningProbability
@@ -132,9 +131,11 @@ class MCTSNode:
                 explore = MCTSNode.C * math.sqrt(
                     math.log(self.visitCount) / childNode.visitCount
                 )
-                values[a] = exploit + explore
+                values[a] = self.actions[a] * (exploit + explore)
             else:
-                values[a] = MCTSNode.C * math.sqrt(math.log(self.visitCount))
+                values[a] = (
+                    self.actions[a] * MCTSNode.C * math.sqrt(math.log(self.visitCount))
+                )
 
         total = sum(values.values())
         if total == 0:
@@ -147,7 +148,7 @@ class MCTSNode:
         result = 0
 
         for i in range(depth):
-            result += 1 if state.hasViolation() else 0
+            result += 1 if state.violation else 0
             possible_actions = state.get_possible_actions_with_probabilities(
                 agentActions[i]
             )
