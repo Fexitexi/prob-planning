@@ -50,8 +50,8 @@ class SamplingConfig:
     def n_asp(self, horizon: int, n_actions: int = 5) -> int:
         """Number of worlds required for ASP-Gen / dynamic world building."""
         return math.ceil(
-            (1.0 / (2.0 * self.epsilon ** 2))
-            * math.log((2.0 * n_actions ** horizon) / self.delta)
+            (1.0 / (2.0 * self.epsilon**2))
+            * math.log((2.0 * n_actions**horizon) / self.delta)
         )
 
     def __post_init__(self):
@@ -77,6 +77,7 @@ class Config:
     rounds: int = 10
     ctd: bool = False
     render: bool = False
+    logLevel: int = 0
 
     @classmethod
     def from_args(cls, args) -> "Config":
@@ -95,4 +96,5 @@ class Config:
             rounds=args.rounds,
             ctd=bool(args.ctd),
             render=bool(args.render),
+            logLevel=args.logLevel,
         )

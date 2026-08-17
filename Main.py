@@ -52,6 +52,9 @@ def run(config: Config, seed: int | None = None):
     ctd_failure = 0
     frogs_killed = 0
     rot_counts = []
+    checkCount = 0
+    typeI_errors = 0
+    typeII_errors = 0
     sips = {}
     intervention_count = 0
 
@@ -106,6 +109,28 @@ def run(config: Config, seed: int | None = None):
                     )
             end_time_check = time.time()
             check_times.append(end_time_check - start_time_check)
+
+            if config.logLevel > 2:
+                checkCount += 1
+                # calculate typeI and II errors via brute_force
+                sim_state: SimulationState = SimulationState.from_state(
+                    gar._state, config.ctd
+                )
+                real_probability = (
+                    sim_state.calculate_violation_probability_brute_force(
+                        executed_actions
+                    )
+                )
+                above_risk_threshold = real_probability > config.sampling.epsilon
+
+                if rot and above_risk_threshold:
+                    # type I error has been made, accepting null hypothesis though incorrect
+                    typeI_errors += 1
+
+                if not rot and not above_risk_threshold:
+                    # type II error has been made, accepting alternative hypothesis though incorrect
+                    typeII_errors += 1
+
             if rot:
                 # rule of three is fulfilled, execute RL policy
                 if len(actions) > 0:
@@ -171,6 +196,29 @@ def run(config: Config, seed: int | None = None):
                             raise NotImplementedError(
                                 f"Sampling mode {sampling_mode!r} is not wired in Main.py"
                             )
+                    if config.logLevel > 2:
+                        checkCount += 1
+                        # calculate typeI and II errors via brute_force
+                        sim_state: SimulationState = SimulationState.from_state(
+                            gar._state, config.ctd
+                        )
+                        real_probability = (
+                            sim_state.calculate_violation_probability_brute_force(
+                                policy_fix
+                            )
+                        )
+                        above_risk_threshold = (
+                            real_probability > config.sampling.epsilon
+                        )
+
+                        if rot and above_risk_threshold:
+                            # type I error has been made, accepting null hypothesis though incorrect
+                            typeI_errors += 1
+
+                        if not rot and not above_risk_threshold:
+                            # type II error has been made, accepting alternative hypothesis though incorrect
+                            typeII_errors += 1
+
                     if rot:
                         # cache
                         if method == Method.NEW_CACHE:
@@ -284,6 +332,9 @@ def run(config: Config, seed: int | None = None):
         frogs_killed,
         ctd_success,
         ctd_triggered,
+        checkCount,
+        typeI_errors,
+        typeII_errors,
     )
 
 
@@ -317,6 +368,12 @@ if __name__ == "__main__":
         "--ctd", type=int, default=0, choices=[0, 1], help="0 - no ctd / 1 - ctd"
     )
     parser.add_argument(
+        "--logLevel",
+        type=int,
+        default=0,
+        help="determines the level of statistics printed",
+    )
+    parser.add_argument(
         "--render",
         type=int,
         default=0,
@@ -347,6 +404,9 @@ if __name__ == "__main__":
     all_frogs_killed = 0
     all_ctd_success = 0
     all_ctd_triggered = 0
+    all_check_counts = 0
+    all_typeI_errors = 0
+    all_typeII_errors = 0
     for i in range(config.rounds):
         (
             step,
@@ -358,6 +418,9 @@ if __name__ == "__main__":
             frogs_killed,
             ctd_success,
             ctd_triggered,
+            checkCount,
+            typeI_errors,
+            typeII_errors,
         ) = run(config, seeds[i])
         all_step += step
         all_intervention_count += intervention_count
@@ -368,45 +431,58 @@ if __name__ == "__main__":
         all_frogs_killed += frogs_killed
         all_ctd_success += ctd_success
         all_ctd_triggered += ctd_triggered
-    if config.method in (Method.NEW, Method.NEW_CACHE):
-        if all_rot_counts:
-            sum_rot = 0
-            count_neg = 0
-            for r in all_rot_counts:
-                if r != -1:
-                    sum_rot += r
-                else:
-                    count_neg += 1
-            avg_rot = sum_rot / (len(all_rot_counts) - count_neg)
-            max_rot = max(all_rot_counts)
+        all_check_counts += checkCount
+        all_typeI_errors += typeI_errors
+        all_typeII_errors += typeII_errors
+
+    if config.logLevel > 2:
+        if config.method in (Method.NEW, Method.NEW_CACHE):
+            avg_typeI_error = all_typeI_errors / all_check_counts
+            avg_typeII_error = all_typeII_errors / all_check_counts
             print(
-                f"Average rot_checks: {avg_rot:.2f}, Max rot_checks: {
-                    max_rot:.2f}, Neg rot_checks: {count_neg}"
+                f"Average Type I error: {avg_typeI_error:.2f}, Average Type II error: {avg_typeII_error:.2f}"
             )
-        if all_check_times:
-            avg_check = sum(all_check_times) / len(all_check_times)
-            max_check = max(all_check_times)
+    if config.logLevel > 0:
+        if config.method in (Method.NEW, Method.NEW_CACHE):
+            if all_rot_counts:
+                sum_rot = 0
+                count_neg = 0
+                for r in all_rot_counts:
+                    if r != -1:
+                        sum_rot += r
+                    else:
+                        count_neg += 1
+                avg_rot = sum_rot / (len(all_rot_counts) - count_neg)
+                max_rot = max(all_rot_counts)
+                print(
+                    f"Average rot_checks: {avg_rot:.2f}, Max rot_checks: {
+                        max_rot:.2f}, Neg rot_checks: {count_neg}"
+                )
+            if all_check_times:
+                avg_check = sum(all_check_times) / len(all_check_times)
+                max_check = max(all_check_times)
+                print(
+                    f"Average checking time: {avg_check:.4f}, Max checking time: {
+                        max_check:.4f}"
+                )
+        if all_fix_times and config.method != Method.RL:
+            avg_fix = sum(all_fix_times) / len(all_fix_times)
+            max_fix = max(all_fix_times)
+            print(f"Average fixing time: {avg_fix:.4f}, Max fixing time: {max_fix:.4f}")
+        if all_full_times and config.method != Method.RL:
+            avg_full = sum(all_full_times) / len(all_full_times)
+            max_full = max(all_full_times)
             print(
-                f"Average checking time: {avg_check:.4f}, Max checking time: {
-                    max_check:.4f}"
+                f"Average time to compute step: {
+                    avg_full:.4f}, Max time to compute step: {max_full:.4f}"
             )
-    if all_fix_times and config.method != Method.RL:
-        avg_fix = sum(all_fix_times) / len(all_fix_times)
-        max_fix = max(all_fix_times)
-        print(f"Average fixing time: {avg_fix:.4f}, Max fixing time: {max_fix:.4f}")
-    if all_full_times and config.method != Method.RL:
-        avg_full = sum(all_full_times) / len(all_full_times)
-        max_full = max(all_full_times)
         print(
-            f"Average time to compute step: {avg_full:.4f}, Max time to compute step: {
-                max_full:.4f}"
+            f"Steps: {all_step / config.rounds}, Interventions: {
+                all_intervention_count / config.rounds
+            }"
         )
-    print(
-        f"Steps: {all_step / config.rounds}, Interventions: {
-            all_intervention_count / config.rounds
-        }"
-    )
-    print(f"Frogs killed: {all_frogs_killed / config.rounds}")
+        print(f"Frogs killed: {all_frogs_killed / config.rounds}")
+
     if config.method == Method.RL:
         print(
             f"{all_step / config.rounds:.2f}, 0.00, 0.00, {

@@ -51,6 +51,7 @@ class SimulationState:
             + self.size.to_bytes(4, "little")
             + self.lake_respawn.to_bytes(4, "little")
             + self.ctd.to_bytes(1, "little")
+            + bool(self.violation).to_bytes(1, "little")
         )
         object.__setattr__(self, "_key", key)
         object.__setattr__(self, "_hash", hash(key))
@@ -77,7 +78,7 @@ class SimulationState:
             preferred_dir, other_dirs = self.get_frog_actions(frog)
 
             if preferred_dir is not None and other_dirs:
-                # common paviolation, preferred = 70%, other options share the 30%
+                # preferred = 70%, other options share the 30%
                 frog_actions[preferred_dir] = SimulationState.PREFERENCE_WEIGHT
                 other_prob = (1.0 - SimulationState.PREFERENCE_WEIGHT) / len(other_dirs)
                 for d in other_dirs:
@@ -144,7 +145,7 @@ class SimulationState:
         else:
             updates["frogs"] = state.frogs.copy()
 
-        updates["violation"] = replace(state, **updates).hasViolation()
+        updates["violation"] = replace(state, **updates).has_violation()
 
         same_pos = (updates["agent"] == updates["frogs"]).all(axis=-1)
         updates["captured_frogs"] = (
@@ -155,8 +156,6 @@ class SimulationState:
             same_pos & np.logical_not(updates["captured_frogs"])
         ) | state.dead_frogs
 
-        # A lake is emptied only if the agent is orthogonally adjacent to it
-        # *after* moving and the lake was full before this step.
         agent_empties = (np.abs(updates["agent"] - state.lakes).sum(axis=1) == 1) & (
             state.lake_timer == 0
         )
@@ -165,8 +164,6 @@ class SimulationState:
         )
         updates["lakes_full"] = updates["lake_timer"] == 0
 
-        # Stun frogs that are adjacent to a lake that was just emptied.
-        # Use the new frog positions after their actions.
         diff_frogs = np.abs(updates["frogs"][:, None, :] - state.lakes[None, :, :])
         near_lake = diff_frogs.max(axis=2) == 1
         near_emptied_lake = near_lake & agent_empties[None, :]
@@ -178,12 +175,7 @@ class SimulationState:
 
         return replace(state, **updates)
 
-    def hasViolation(self):
-        # A collision is a violation if the agent occupies the same cell as a
-        # frog that was alive (not dead/captured) *before* the action that led
-        # to this state. This lets the MCTS detect violations on the state
-        # produced by apply_action, even though that method marks the frog as
-        # dead/captured.
+    def has_violation(self):
         active = np.logical_not(self.dead_frogs | self.captured_frogs)
         if np.any(np.all(self.agent == self.frogs, axis=1) & active):
             return True
@@ -195,8 +187,6 @@ class SimulationState:
             if not agent_orthogonal.any():
                 return False
 
-            # For CTD, use current dead/captured status: a frog that is already
-            # dead or captured cannot trigger a future-duty violation.
             active_frogs = np.logical_not(self.dead_frogs | self.captured_frogs)
             diff_frogs = np.abs(self.frogs[:, None, :] - self.lakes[None, :, :])
             frog_near_lake = (
@@ -207,6 +197,25 @@ class SimulationState:
             return combined_per_lake.any()
 
         return False
+
+    def calculate_violation_probability_brute_force(self, agentActions: list):
+        violation_probability = 0.0
+        # short circuit if an early violation happens
+        if self.violation:
+            return 1
+
+        # return 0 if a leaf node (and no violation due to the if above)
+        if len(agentActions) == 0:
+            return 0
+
+        for a, p in self.get_possible_actions_with_probabilities(
+            agentActions[0]
+        ).items():
+            state = self.apply_action(a)
+            violation_probability += (
+                p * state.calculate_violation_probability_brute_force(agentActions[1:])
+            )
+        return violation_probability
 
     @staticmethod
     def _compute_lake_action_grid(lake_best_step):
