@@ -511,8 +511,17 @@ class ASPTransformer:
                 norms = f.read()
 
         loop = 0
-        means = {x: 0 for x in range(self._sampling.strata + 1)}
         violations = []
+        nullmean = self._sampling.epsilon - (
+            self._sampling.epsilon * self._sampling.indifference
+        )
+        altmean = self._sampling.epsilon + (
+            self._sampling.epsilon * self._sampling.indifference
+        )
+        wealthRejecting = 1
+        wealthAccepting = 1
+        lambdaRejecting = 1
+        lambdaAccepting = 1
         while loop > -1:
             loop += 1
 
@@ -559,7 +568,6 @@ class ASPTransformer:
 
             self.populate_rnd_stratified()
 
-            # for i in range((loop - 1) * strata, loop * strata):
             for i in range(self._sampling.strata):
                 for f, (c, r) in enumerate(state.frogs):
                     if f not in self._frogs:
@@ -569,6 +577,9 @@ class ASPTransformer:
                         ran = self._rnd[i][f][t]
                         lines.append(f"f_rnd({f}, {t}, {i}, {int(ran * 100)}).")
 
+            # computes the possible actions for all positions the frogs can reach within the horizon
+            # adds them as act_pos
+            # grounded once per state
             done = []
             for i_f, (c_f, r_f) in enumerate(state.frogs):
                 if i_f not in self._frogs:
@@ -606,7 +617,7 @@ class ASPTransformer:
             self._check.add("base", [], "\n".join(lines))
             self._check.ground([("base", [])], context=self)
             self._check.solve(on_model=self.on_model)
-            # print(self._latest_model)
+
             loopViolations = 0
             for sym in self._latest_model:
                 if sym.name == "norm_violation" and len(sym.arguments) == 1:
@@ -614,19 +625,23 @@ class ASPTransformer:
                     violations.append(world)
                     loopViolations += 1
 
-            means[loopViolations] += 1
-            # print(loop)
+            wealthRejecting, lambdaRejecting, wealthAccepting, lambdaAccepting = (
+                update_martingale(
+                    wealthRejecting,
+                    wealthAccepting,
+                    loopViolations,
+                    self._sampling.strata,
+                    nullmean,
+                    altmean,
+                    lambdaRejecting,
+                    lambdaAccepting,
+                )
+            )
 
-            if loop >= 30:
-                match self.sprt_check(means):
-                    case -1:
-                        return violations, False
-                    case 0:
-                        # if (loop * strata > max_worlds):
-                        #    return violations, False
-                        continue
-                    case 1:
-                        return violations, True
+            if wealthAccepting > 1 / self._sampling.delta:
+                return violations, True
+            if wealthRejecting > 1 / self._sampling.delta:
+                return violations, False
 
     def populate_rnd_stratified(self):
         strata = self._sampling.strata
@@ -637,43 +652,6 @@ class ASPTransformer:
                 random.shuffle(cells)
                 for i in range(strata):
                     self._rnd[i][f][t] = (i + random.random()) / strata
-
-    def sprt_check(self, means):
-        # print("sprt_check")
-        strata = self._sampling.strata
-        epsilon = self._sampling.epsilon
-        delta = self._sampling.delta
-        indifference = self._sampling.indifference
-
-        mean_numerator = 0.0
-        variance_numerator = 0.0
-        denominator = 0.0
-
-        for i, v in means.items():
-            mean_numerator += (i * v) / strata
-            variance_numerator += ((i / strata) ** 2) * v
-            denominator += v
-
-        mean = mean_numerator / denominator
-        boundary_value = mean - epsilon - delta
-
-        variance = ((variance_numerator / denominator) - mean**2) / (
-            denominator / strata
-        )
-        error_bounds = math.log((1 - indifference) / indifference)
-        reference_value = variance / (2 * delta) * error_bounds
-        # print(means)
-        # print("mean: ", mean)
-        # print("boundary_value: ", boundary_value)
-        # print("reference_value accept: ",
-        #      boundary_value, " < ", -reference_value)
-        # print("reference_value reject: ", boundary_value, " > ", reference_value)
-        if boundary_value < -reference_value:
-            return 1
-        elif boundary_value > reference_value:
-            return -1
-        else:
-            return 0
 
     def compute_reward_new(self, lawn, lake, dist_lawn, dist_lake):
         lawn = lawn.number
@@ -696,3 +674,33 @@ class ASPTransformer:
 
     def on_model(self, m):
         self._latest_model = m.symbols(shown=True)
+
+
+def update_martingale(
+    wealthAccepting,
+    wealthRejecting,
+    outcome,
+    strata,
+    nullmean,
+    altmean,
+    lambdaAccepting,
+    lambdaRejecting,
+):
+
+    # wealthAccepting tracks the wealth of a gambler betting that the true mean is below the mean of the null
+    # if he makes money, his intuition is correct and we can accept the null
+    wealthAccepting *= 1 - (((outcome / strata) - nullmean) * lambdaAccepting)
+    # wealthRejecting tracks the wealth of a gambler betting that the true mean is above the mean of the alternative
+    # if he makes money, his intuition is correct and we can reject the null
+    wealthRejecting *= 1 + (((outcome / strata) - altmean) * lambdaRejecting)
+
+    newLambda = (
+        lambdaAccepting
+        * ((altmean / nullmean) ** outcome)
+        * (((1 - altmean) / (1 - nullmean)) ** (strata - outcome))
+    )
+    newAltLambda = lambdaRejecting * (
+        (nullmean / altmean) ** outcome
+        * ((1 - nullmean) / (1 - altmean)) ** (strata - outcome)
+    )
+    return wealthAccepting, newLambda, wealthRejecting, newAltLambda
