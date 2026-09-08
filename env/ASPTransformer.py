@@ -331,6 +331,7 @@ class ASPTransformer:
     def call_clingo_generate(self, state, violations):
         lines = []
         dyn = self.build_dynamic(state)
+        self._generate = clingo.Control()
         # for constraint in self._constraints:
         #    lines.append(constraint)
         if violations:
@@ -344,6 +345,16 @@ class ASPTransformer:
                     for t, b in enumerate(a):
                         for f, action in enumerate(b[1:]):
                             lines.append(f"f_action({action}, {f}, {t}, {i}).")
+            elif self._sampling.mode == SamplingMode.STRATIFIED:
+                with self._generate.backend() as backend:
+                    for sym in violations:
+                        for f, (c, r) in enumerate(state.frogs):
+                            if f not in self._frogs:
+                                continue
+                            lines.append(f"frog({c}, {r}, {f}, 0, {sym.arguments[3]}).")
+
+                        atom_id = backend.add_atom(sym)
+                        backend.add_external(atom_id, clingo.TruthValue.True_)
             else:
                 for i in violations:
                     for f, (c, r) in enumerate(state.frogs):
@@ -366,7 +377,6 @@ class ASPTransformer:
         else:
             with open("norms.lp", "r") as f:
                 norms = f.read()
-        self._generate = clingo.Control()
         self._generate.add(
             "base",
             [],
@@ -494,7 +504,7 @@ class ASPTransformer:
                 violations.append(world)
                 if world > max_world - self._n_rot:
                     rot = False
-        return violations, rot
+        return violations, rot, self._n_rot
 
     def call_stratified_check(self, state, actions, sips):
         self._latest_model = None
@@ -639,9 +649,9 @@ class ASPTransformer:
             )
 
             if wealthAccepting > 1 / self._sampling.delta:
-                return violations, True
+                return violations, True, 0
             if wealthRejecting > 1 / self._sampling.delta:
-                return violations, False
+                return violations, False, 0
 
     def populate_rnd_stratified(self):
         strata = self._sampling.strata

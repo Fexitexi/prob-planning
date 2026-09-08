@@ -113,7 +113,8 @@ class SimulationState:
         unreachable = np.iinfo(np.int32).max
 
         # Distance from (x, y) to every lake.
-        dists = np.array([d[x, y] for d in self.lake_dist], dtype=np.int32)
+        dists = self.lake_dist[:, x, y]
+        # dists = np.array([d[x, y] for d in self.lake_dist], dtype=np.int32)
         masked = np.where(self.lakes_full, dists, unreachable)
         nearest_idx = int(masked.argmin())
 
@@ -244,7 +245,7 @@ class SimulationState:
             frog_timer=state.frog_timer.copy(),
             walls=state.walls.copy(),
             pos_actions=state.pos_actions,
-            lake_dist=state.lake_dist,
+            lake_dist=np.stack(state.lake_dist),
             lake_action_grid=SimulationState._compute_lake_action_grid(
                 state.lake_best_step
             ),

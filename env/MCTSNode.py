@@ -1,6 +1,5 @@
 import math
 import random
-import numpy as np
 
 from scipy.stats import norm
 
@@ -22,7 +21,7 @@ class MCTSNode:
     def check_MCTS(self, agentActions, depth, confidence, indifference, maxVisit):
         z = norm.ppf((1 + confidence) / 2)
         runningProbability = 0.0
-        violations = []  # TODO add
+        violations = []
         sumSqared = 0.0
         minVisit = maxVisit
         while self.visitCount < minVisit and self.visitCount < maxVisit:
@@ -76,7 +75,6 @@ class MCTSNode:
             ):  # trade-off: a check each violation for minimizing the ASP Gen program
                 violations.append(actionSequence)
 
-            # print("actionSequence: ", actionSequence)
             # update visits
             for n in nodeSequence:
                 n.visitCount += 1
@@ -84,32 +82,21 @@ class MCTSNode:
                     n.value += 1
 
             # update running violation probability
-            outcome = 1 if result > 0 else 0
-            runningProbability = (1 / self.visitCount) * outcome * weight + (
-                (self.visitCount - 1) / self.visitCount
-            ) * runningProbability
-            # print(
-            #    f"runningProbability ({runningProbability}) = 1 / {self.visitCount} * {outcome} * {weight} * ({self.visitCount - 1}/{self.visitCount}) * {oldRunningProbability}"
-            # )
+            outcome = weight if result > 0 else 0
+            oldmean = runningProbability
+            runningProbability += (outcome - runningProbability) / self.visitCount
 
             # update sum_sqared
-            sumSqared += math.pow(outcome * weight, 2)
+            sumSqared += (outcome - oldmean) * (outcome - runningProbability)
 
-            # update variance
-            variance = (
-                1
-                / (self.visitCount - 1)
-                * (sumSqared - self.visitCount * math.pow(runningProbability, 2))
-            )
             # update minimum visits
             if runningProbability > 0:
-                minVisit = variance * (2 * z / (indifference * runningProbability)) ** 2
-                # print(
-                #    f"minVisit({minVisit}) = {variance} * (2* {z} / {indifference} * {runningProbability})**2"
-                # )
+                minVisit = (sumSqared / self.visitCount) * (
+                    2 * z / (indifference * runningProbability)
+                ) ** 2
             # print(f"current visit: {self.visitCount}, minVisit: {minVisit}")
 
-        return violations, runningProbability
+        return violations, runningProbability, self.visitCount
 
     def select_action(self, probabilities):
         s = 0.0
