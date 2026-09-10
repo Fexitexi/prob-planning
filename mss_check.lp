@@ -45,37 +45,31 @@ frog(X-1,Y,I,T+1,W) :- frog(X,Y,I,T,W), f_action(2,I,T,W).    % move left
 frog(X,Y-1,I,T+1,W) :- frog(X,Y,I,T,W), f_action(3,I,T,W).    % move down
 
 frog_capture(I,T,W) :- agent(X,Y,T), frog(X,Y,I,T,W).
+ctd_check(F,W) :- frog_capture(F,T,W), ctd(F,T,W).
 
 lake_frog_prox(F,L,T,W) :- lake(X1,Y1,L), frog(X2,Y2,F,T,W), |X1 - X2| + |Y1 - Y2| == 1.
 lake_frog_prox(F,L,T,W) :- lake(X1,Y1,L), frog(X2,Y2,F,T,W), |X1 - X2| + |Y1 - Y2| == 2, |X1 - X2| == 1.
 lake_frog_prox(F,L,T,W) :- lake(X1,Y1,L), frog(X2,Y2,F,T,W), |X1 - X2| + |Y1 - Y2| == 2, |Y1 - Y2| == 1.
-ctd_init(F,L,T,W) :- lake_timer(L,0,T), lake_frog_prox(F,L,T,W), lake_agent_prox(L,T), agent(X1,Y1,T), frog(X2,Y2,F,T,W), X1 != X2.
-ctd_init(F,L,T,W) :- lake_timer(L,0,T), lake_frog_prox(F,L,T,W), lake_agent_prox(L,T), agent(X1,Y1,T), frog(X2,Y2,F,T,W), Y1 != Y2.
-ctd_init(F,L,TI-4,W) :- frog(X,Y,F,0,W), ctd(F,L,TI).
-any_frog_timer(F,T,W) :- ctd_init(F,L,TI,W), T = TI..TI + 5, TI <= horizon.
+ctd_init(F,T,W) :- lake_timer(L,0,T), lake_frog_prox(F,L,T,W), lake_agent_prox(L,T), agent(X1,Y1,T), frog(X2,Y2,F,T,W), X1 != X2.
+ctd_init(F,T,W) :- lake_timer(L,0,T), lake_frog_prox(F,L,T,W), lake_agent_prox(L,T), agent(X1,Y1,T), frog(X2,Y2,F,T,W), Y1 != Y2.
+ctd(F,T,W) :- ctd_init(F,TI,W), T = TI..TI + 4, TI <= horizon.
+any_frog_timer(F,T,W) :- ctd_init(F,TI,W), T = TI..TI + 5, TI <= horizon.
+
+ctd(I,T,W) :- ctd(I,T), frog(X,Y,I,T,W).
 any_frog_timer(I,T,W) :- frog_timer(I,T), frog(X,Y,I,T,W).
 
-norm_violation(W) :- frog_capture(F,T,W), not any_ctd(F,T,W).
-norm_violation(W) :- any_ctd(F,T,W), not ctd_check(F,W).
-
-any_ctd(F,T,W) :- ctd(F,L,T,W).
-ctd_check(F,W) :- frog_capture(F,T,W), any_ctd(F,T,W).
-ctd(F,L,T,W) :- ctd_init(F,L,TI,W), T = TI..TI + 4, TI <= horizon.
+norm_violation(W) :- frog_capture(F,T,W), not ctd(F,T,W).
+norm_violation(W) :- ctd(F,T,W), not ctd_check(F,W).
 
 #show norm_violation/1.
-#defined frog_timer/2.
-#defined any_frog_timer/3.
 #defined norm_violation/1.
-
+#defined frog_timer/2.
 #defined f_rnd/4.
 #defined act_pos/5.
 #defined lake_order/4.
 #defined lake_action/4.
 #defined frog_timer/3.
-#defined ctd/3.
 #defined ctd/2.
-#defined ctd/1.
 #defined ctd_world/1.
-#defined sips_lake/2.
 #defined lake_timer/3.
 #defined action/2.

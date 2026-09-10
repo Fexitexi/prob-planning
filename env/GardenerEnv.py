@@ -10,7 +10,6 @@ from env.state import GardenerState
 
 
 class GardenerEnv(gym.Env):
-
     def __init__(self, size: int = 15, grass_respawn: int = 50, lake_respawn: int = 20):
         # The size of the square grid (5x5 by default)
 
@@ -31,6 +30,7 @@ class GardenerEnv(gym.Env):
         self._state.lakes = np.full((num_lakes, 2), -1, dtype=int)
         self._state.lakes_full = np.ones(num_lakes, dtype=bool)
         self._state.dead_frogs = np.zeros(num_frogs, dtype=bool)
+        self._state.stun_counter = 0
         self._state.capt_frogs = np.zeros(num_frogs, dtype=bool)
         self._state.lake_timer = np.zeros(num_lakes, dtype=int)
         self._state.frog_timer = np.zeros(num_frogs, dtype=int)
@@ -46,34 +46,41 @@ class GardenerEnv(gym.Env):
         # Define what the agent can observe
         # Dict space gives us structured, human-readable observations
         self.observation_space = gym.spaces.Dict(
-            {"agent": gym.spaces.Box(0, size - 1, shape=(2,), dtype=int),
-             # [x, y] coordinates
-             "frogs": gym.spaces.Box(0, size - 1, shape=(num_frogs, 2),
-                                     dtype=int),  # array of [x, y] coordinates
-             "lakes": gym.spaces.Box(0, size - 1, shape=(num_lakes, 2),
-                                     dtype=int),  # array of [x, y] coordinates
-             "size": gym.spaces.Discrete(size + 1),
-             "grass_respawn": gym.spaces.Discrete(grass_respawn + 1),
-             "lake_respawn": gym.spaces.Discrete(lake_respawn + 1),
-             "lakes_full": gym.spaces.Box(0, 1, shape=(num_lakes,),
-                                          dtype=bool),
-             "dead_frogs": gym.spaces.Box(0, 1, shape=(num_frogs,),
-                                          dtype=bool),
-             "capt_frogs": gym.spaces.Box(0, 1, shape=(num_frogs,),
-                                          dtype=bool),
-             "lake_timer": gym.spaces.Box(0, lake_respawn, shape=(num_lakes,), dtype=int),
-             "frog_timer": gym.spaces.Box(0, 5, shape=(num_frogs,), dtype=int),
-             "grass": gym.spaces.Box(0, size - 1, shape=(num_grass, 2),
-                                     dtype=int),
-             "grass_active": gym.spaces.Box(0, 1, shape=(num_grass,), dtype=bool),
-             "grass_timer": gym.spaces.Box(0, grass_respawn, shape=(num_grass,), dtype=int),
-             "walls": gym.spaces.Box(0, size - 1, shape=(num_walls, 2),
-                                     dtype=int),
-             "pos_actions": gym.spaces.Box(0, 1, shape=(size, size, 5), dtype=int),
-             "lake_dist": gym.spaces.Box(0, np.iinfo(np.int32).max, shape=(num_lakes, size, size), dtype=int),
-             "grass_dist": gym.spaces.Box(0, np.iinfo(np.int32).max, shape=(num_grass, size, size), dtype=int),
-             })
-
+            {
+                "agent": gym.spaces.Box(0, size - 1, shape=(2,), dtype=int),
+                # [x, y] coordinates
+                "frogs": gym.spaces.Box(
+                    0, size - 1, shape=(num_frogs, 2), dtype=int
+                ),  # array of [x, y] coordinates
+                "lakes": gym.spaces.Box(
+                    0, size - 1, shape=(num_lakes, 2), dtype=int
+                ),  # array of [x, y] coordinates
+                "size": gym.spaces.Discrete(size + 1),
+                "grass_respawn": gym.spaces.Discrete(grass_respawn + 1),
+                "lake_respawn": gym.spaces.Discrete(lake_respawn + 1),
+                "lakes_full": gym.spaces.Box(0, 1, shape=(num_lakes,), dtype=bool),
+                "dead_frogs": gym.spaces.Box(0, 1, shape=(num_frogs,), dtype=bool),
+                "stun_counter": gym.spaces.Discrete(1),
+                "capt_frogs": gym.spaces.Box(0, 1, shape=(num_frogs,), dtype=bool),
+                "lake_timer": gym.spaces.Box(
+                    0, lake_respawn, shape=(num_lakes,), dtype=int
+                ),
+                "frog_timer": gym.spaces.Box(0, 5, shape=(num_frogs,), dtype=int),
+                "grass": gym.spaces.Box(0, size - 1, shape=(num_grass, 2), dtype=int),
+                "grass_active": gym.spaces.Box(0, 1, shape=(num_grass,), dtype=bool),
+                "grass_timer": gym.spaces.Box(
+                    0, grass_respawn, shape=(num_grass,), dtype=int
+                ),
+                "walls": gym.spaces.Box(0, size - 1, shape=(num_walls, 2), dtype=int),
+                "pos_actions": gym.spaces.Box(0, 1, shape=(size, size, 5), dtype=int),
+                "lake_dist": gym.spaces.Box(
+                    0, np.iinfo(np.int32).max, shape=(num_lakes, size, size), dtype=int
+                ),
+                "grass_dist": gym.spaces.Box(
+                    0, np.iinfo(np.int32).max, shape=(num_grass, size, size), dtype=int
+                ),
+            }
+        )
 
         self._renderer = GardenerRenderer()
         self._dynamics = GardenerDynamics(self._np_random_seed)
@@ -84,24 +91,27 @@ class GardenerEnv(gym.Env):
         Returns:
             dict: Observation with agent, target and frog positions
         """
-        return {"agent": self._state.agent,
-                "frogs": self._state.frogs,
-                "size": self._state.size,
-                "lake_respawn": self._state.lake_respawn,
-                "grass_respawn": self._state.grass_respawn,
-                "lakes": self._state.lakes,
-                "lakes_full": self._state.lakes_full,
-                "dead_frogs": self._state.dead_frogs,
-                "capt_frogs": self._state.capt_frogs,
-                "lake_timer": self._state.lake_timer,
-                "frog_timer": self._state.frog_timer,
-                "grass": self._state.grass,
-                "grass_active": self._state.grass_active,
-                "grass_timer": self._state.grass_timer,
-                "walls": self._state.walls,
-                "pos_actions": self._state.pos_actions,
-                "lake_dist": np.array(self._state.lake_dist, dtype=int),
-                "grass_dist": np.array(self._state.grass_dist, dtype=int)}
+        return {
+            "agent": self._state.agent,
+            "frogs": self._state.frogs,
+            "size": self._state.size,
+            "lake_respawn": self._state.lake_respawn,
+            "grass_respawn": self._state.grass_respawn,
+            "lakes": self._state.lakes,
+            "lakes_full": self._state.lakes_full,
+            "dead_frogs": self._state.dead_frogs,
+            "stun_counter": self._state.stun_counter,
+            "capt_frogs": self._state.capt_frogs,
+            "lake_timer": self._state.lake_timer,
+            "frog_timer": self._state.frog_timer,
+            "grass": self._state.grass,
+            "grass_active": self._state.grass_active,
+            "grass_timer": self._state.grass_timer,
+            "walls": self._state.walls,
+            "pos_actions": self._state.pos_actions,
+            "lake_dist": np.array(self._state.lake_dist, dtype=int),
+            "grass_dist": np.array(self._state.grass_dist, dtype=int),
+        }
 
     def _get_info(self):
         """Compute auxiliary information for debugging.
@@ -109,12 +119,15 @@ class GardenerEnv(gym.Env):
         Returns:
             dict: Info with distance between agent and target
         """
-        return {"distance": np.linalg.norm(
-            self._state.agent - self._state.grass[self._state.grass_active.argmax()],
-            ord=1)}
+        return {
+            "distance": np.linalg.norm(
+                self._state.agent
+                - self._state.grass[self._state.grass_active.argmax()],
+                ord=1,
+            )
+        }
 
-    def reset(self, seed: Optional[int] = None,
-              options: Optional[dict] = None):
+    def reset(self, seed: Optional[int] = None, options: Optional[dict] = None):
         """Start a new episode.
 
         Args:
@@ -132,25 +145,26 @@ class GardenerEnv(gym.Env):
         self._state.score = 0
 
         # Randomly place the agent anywhere on the grid
-        self._state.agent = self.np_random.integers(0, self._state.size,
-                                                    size=2,
-                                                    dtype=int)
+        self._state.agent = self.np_random.integers(
+            0, self._state.size, size=2, dtype=int
+        )
 
         # Place frogs randomly on the grid, avoiding agent
-        all_positions = {(x, y) for x in range(self._state.size) for y in
-                         range(self._state.size)}
+        all_positions = {
+            (x, y) for x in range(self._state.size) for y in range(self._state.size)
+        }
         all_positions.discard(tuple(self._state.agent))
-        frog_positions = self.np_random.choice(list(all_positions),
-                                               size=len(self._state.frogs),
-                                               replace=False)
+        frog_positions = self.np_random.choice(
+            list(all_positions), size=len(self._state.frogs), replace=False
+        )
         for frog_pos in frog_positions:
             all_positions.discard(tuple(frog_pos))
-        lake_positions = self.np_random.choice(list(all_positions),
-                                               size=len(self._state.lakes),
-                                               replace=False)
-        #easy
-        #lake_positions = []
-        #while len(lake_positions) < len(self._state.lakes):
+        lake_positions = self.np_random.choice(
+            list(all_positions), size=len(self._state.lakes), replace=False
+        )
+        # easy
+        # lake_positions = []
+        # while len(lake_positions) < len(self._state.lakes):
         #    lake_position = self.np_random.choice(list(all_positions),
         #                                          size=1,
         #                                          replace=False)
@@ -171,17 +185,13 @@ class GardenerEnv(gym.Env):
         for lake_pos in lake_positions:
             all_positions.discard(tuple(lake_pos))
             lx, ly = lake_pos
-            neighbors = [
-                (lx + 1, ly), (lx - 1, ly),
-                (lx, ly + 1), (lx, ly - 1)
-            ]
+            neighbors = [(lx + 1, ly), (lx - 1, ly), (lx, ly + 1), (lx, ly - 1)]
             for nx, ny in neighbors:
                 if 0 <= nx < self._state.size and 0 <= ny < self._state.size:
                     all_positions.discard((nx, ny))
-        grass_positions = self.np_random.choice(list(all_positions),
-                                                size=len(self._state.grass),
-                                                replace=False)
-
+        grass_positions = self.np_random.choice(
+            list(all_positions), size=len(self._state.grass), replace=False
+        )
 
         for grass_pos in grass_positions:
             all_positions.discard(tuple(grass_pos))
@@ -189,8 +199,9 @@ class GardenerEnv(gym.Env):
         # Generate walls ensuring accessibility of all non-lake, non-wall cells
         def is_accessible(excluded):
             # BFS over free cells
-            free = {(x, y) for x in range(self._state.size)
-                    for y in range(self._state.size)}
+            free = {
+                (x, y) for x in range(self._state.size) for y in range(self._state.size)
+            }
             free -= set(map(tuple, lake_positions))
             free -= set(excluded)
             if not free:
@@ -223,8 +234,8 @@ class GardenerEnv(gym.Env):
         self._state.frogs = np.array(frog_positions, dtype=int)
         self._state.grass = np.array(grass_positions, dtype=int)
 
-        #print("free candidates:", len(remaining_positions))
-        #print("accepted:", len(wall_positions))
+        # print("free candidates:", len(remaining_positions))
+        # print("accepted:", len(wall_positions))
 
         # -------------------------------------------------------------
         # Precompute shortest-path distance and best-step fields
@@ -242,20 +253,22 @@ class GardenerEnv(gym.Env):
                 is_lake = np.any(np.all(self._state.lakes == [c, r], axis=1))
                 if not is_wall and not is_lake:
                     mask = np.ones(len(_action_to_direction), dtype=np.int8)
-                    x, y = (c,r)
+                    x, y = (c, r)
                     # Prevent moves that leave the grid
-                    if x == self._state.size - 1: mask[0] = 0
-                    if y == self._state.size - 1: mask[1] = 0
-                    if x == 0: mask[2] = 0
-                    if y == 0: mask[3] = 0
+                    if x == self._state.size - 1:
+                        mask[0] = 0
+                    if y == self._state.size - 1:
+                        mask[1] = 0
+                    if x == 0:
+                        mask[2] = 0
+                    if y == 0:
+                        mask[3] = 0
                     # Prevent moves that would step onto a lake
                     for action, direction in _action_to_direction.items():
-                        nx, ny = (c,r) + direction
-                        if any((nx == lx and ny == ly) for lx, ly in
-                               self._state.lakes):
+                        nx, ny = (c, r) + direction
+                        if any((nx == lx and ny == ly) for lx, ly in self._state.lakes):
                             mask[action] = 0
-                        if any((nx == wx and ny == wy) for wx, wy in
-                               self._state.walls):
+                        if any((nx == wx and ny == wy) for wx, wy in self._state.walls):
                             mask[action] = 0
                     for i in range(len(mask)):
                         if mask[i] == 1:
@@ -263,7 +276,7 @@ class GardenerEnv(gym.Env):
 
         from collections import deque
 
-        for (lx, ly) in lake_positions:
+        for lx, ly in lake_positions:
             dist = np.full((size, size), np.iinfo(np.int32).max, dtype=np.int32)
             best = np.zeros((size, size, 2), dtype=np.int8)
 
@@ -273,7 +286,7 @@ class GardenerEnv(gym.Env):
 
             while q:
                 x, y = q.popleft()
-                for dx, dy in [(1,0), (-1,0), (0,1), (0,-1)]:
+                for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
                     nx, ny = x + dx, y + dy
                     if 0 <= nx < size and 0 <= ny < size:
                         if (nx, ny) in walls_set:
@@ -290,7 +303,6 @@ class GardenerEnv(gym.Env):
 
             lake_dist.append(dist)
             lake_best_step.append(best)
-
 
         self._state.lake_dict = {}
         for c in range(size):
@@ -322,15 +334,15 @@ class GardenerEnv(gym.Env):
 
         # Precompute grass distances
         grass_dist = []
-        for (gx, gy) in grass_positions:
+        for gx, gy in grass_positions:
             dist = np.full((size, size), np.iinfo(np.int32).max, dtype=np.int32)
             q = deque()
             q.append((gx, gy))
             dist[gx, gy] = 0
-            
+
             while q:
                 x, y = q.popleft()
-                for dx, dy in [(1,0), (-1,0), (0,1), (0,-1)]:
+                for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
                     nx, ny = x + dx, y + dy
                     if 0 <= nx < size and 0 <= ny < size:
                         if (nx, ny) in walls_set:
@@ -342,7 +354,6 @@ class GardenerEnv(gym.Env):
                             q.append((nx, ny))
             grass_dist.append(dist)
         self._state.grass_dist = grass_dist
-
 
         # np_random.choice returns a 1D array if input is 1D, so convert to
         # 2D array of positions
@@ -357,10 +368,11 @@ class GardenerEnv(gym.Env):
         # Save screenshot of initial configuration
         if options and options.get("save_screenshot"):
             self._renderer.draw(self._state)
-            self._renderer.save_screenshot(options.get("screenshot_path", "initial_config.png"))
+            self._renderer.save_screenshot(
+                options.get("screenshot_path", "initial_config.png")
+            )
 
         return observation, info
-
 
     def simulate_samples(self, horizon, q_agent, actions):
         # simulate the environment for a certain horizon
@@ -374,12 +386,11 @@ class GardenerEnv(gym.Env):
                 action = q_agent.getAction(state)
             self._dynamics.move_agent(state, action)
             self._dynamics.move_frogs(state)
-            self.update_env(state, 0 )
+            self.update_env(state, 0)
             executed_actions.append(action)
-            #if np.any(np.all(state.agent == state.frogs, axis=1)):
+            # if np.any(np.all(state.agent == state.frogs, axis=1)):
             #    return False, executed_actions
         return True, executed_actions
-
 
     def sample(self, horizon, size):
         # create a copy of current random variable that does not influence og
@@ -431,10 +442,12 @@ class GardenerEnv(gym.Env):
             if killed_frog_asp:
                 frogs_killed_asp += 1
 
-        print(f"Average number of frog kills (ASP): {frogs_killed_asp / len(samples):.2f}")
-        print(f"Average number of frog kills (RL): {frogs_killed_rl / len(samples):.2f}")
-
-
+        print(
+            f"Average number of frog kills (ASP): {frogs_killed_asp / len(samples):.2f}"
+        )
+        print(
+            f"Average number of frog kills (RL): {frogs_killed_rl / len(samples):.2f}"
+        )
 
     def step(self, action):
         """Execute one timestep within the environment.
@@ -452,15 +465,18 @@ class GardenerEnv(gym.Env):
 
         self._dynamics.move_frogs(self._state)
 
-
         if np.any(np.all(self._state.agent == self._state.frogs, axis=1)):
-            for i,(c,r) in enumerate(self._state.frogs):
-                if self._state.dead_frogs[i]: continue
+            for i, (c, r) in enumerate(self._state.frogs):
+                if self._state.dead_frogs[i] or self._state.capt_frogs[i]:
+                    continue
                 if self._state.agent[0] == c and self._state.agent[1] == r:
-                    self._state.dead_frogs[i] = True
-                    msg = "FROG KILLED!"
-                    #print(f"\033[31m{msg}\033[0m")
-
+                    if self._state.frog_timer[i] > 0:
+                        self._state.capt_frogs[i] = True
+                        msg = "FROG CAPTURED!"
+                    else:
+                        self._state.dead_frogs[i] = True
+                        msg = "FROG KILLED!"
+                    # print(f"\033[31m{msg}\033[0m")
 
         reward = self.update_env(self._state, reward)
 
@@ -491,8 +507,7 @@ class GardenerEnv(gym.Env):
                     reward += 10
                     state.grass_timer[i] = state.grass_respawn
             else:
-                if not state.grass_active[i] and state.grass_timer[
-                    i] > 0:
+                if not state.grass_active[i] and state.grass_timer[i] > 0:
                     state.grass_timer[i] -= 1
                     if state.grass_timer[i] == 0:
                         state.grass_active[i] = True
@@ -519,22 +534,18 @@ class GardenerEnv(gym.Env):
                 reward += 5
                 state.lakes_full[i] = False
                 state.lake_timer[i] = state.lake_respawn
-                for f,(c,r) in enumerate(state.frogs):
+                for f, (c, r) in enumerate(state.frogs):
                     prox = False
-                    if not state.dead_frogs[f]:
-                        if abs(lx - c) + abs(
-                                ly - r) == 1:
+                    if not (state.dead_frogs[f] or state.capt_frogs[f]):
+                        if abs(lx - c) + abs(ly - r) == 1:
                             prox = True
-                        elif abs(lx - c) + abs(
-                                ly - r) == 2 and abs(
-                            lx - c) == 1:
+                        elif abs(lx - c) + abs(ly - r) == 2 and abs(lx - c) == 1:
                             prox = True
-                        elif abs(lx - c) + abs(
-                                ly - r) == 2 and abs(
-                            ly - r) == 1:
+                        elif abs(lx - c) + abs(ly - r) == 2 and abs(ly - r) == 1:
                             prox = True
                     if prox:
                         state.frog_timer[f] = 5
+                        state.stun_counter += 1
         return reward
 
     def render(self):

@@ -56,7 +56,7 @@ class ASPSolver:
         self._check.ground([("base", [])], context=self)
         # self._generate.add("base", [], lines)
 
-    def instantiate_state(self, state: GardenerState, strata, sips):
+    def instantiate_state(self, state: GardenerState, strata):
         lines = []
         # adding agent and agent actions
         lines.append(f"agent({state.agent[0]}, {state.agent[1]}, 0).")
@@ -79,10 +79,7 @@ class ASPSolver:
             if state.frog_timer[f] > 0:
                 for i in range(state.frog_timer[f]):
                     lines.append(f"frog_timer({f}, {i}).")
-
-        # adding ctd counter
-        for s in sips:
-            lines.append(f"ctd({sips[s][0]}, {s}, {sips[s][1]}).")
+                    lines.append(f"ctd({f}, {i - 1}).")
 
         # adding windowed distance maps and preferred and possible frog actions
         done = []
@@ -251,6 +248,7 @@ class ASPSolver:
     def check(self):
         self._latest_model = None
         self._check.solve(on_model=self.on_model)
+        # print(self._latest_model)
         violations = []
         lines = []
         for sym in self._latest_model:

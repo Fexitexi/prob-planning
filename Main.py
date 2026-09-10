@@ -1,3 +1,4 @@
+from env.GardenerEnv import GardenerEnv
 import argparse
 import random
 import time
@@ -8,7 +9,6 @@ from config import Config, Method, SamplingMode
 from env.ASPTransformer import ASPTransformer
 from env.GardenerQAgent import GardenerQAgent
 from env.MCTSNode import MCTSNode
-from env.old.ClingoHelper import ClingoHelperOld
 from env.simulation_state import SimulationState
 from env.state import ObservationState
 from env.StateLibrary import StateLibrary, custom_edges
@@ -23,7 +23,7 @@ gym.envs.registration.register(
 def run(config: Config, seed: int | None = None):
     global env
     env = gym.make("GardenerEnv-v0", size=config.size)
-    gar = env.unwrapped
+    gar: GardenerEnv = env.unwrapped
 
     # load the pre-trained weights
     q_agent = GardenerQAgent()
@@ -40,9 +40,8 @@ def run(config: Config, seed: int | None = None):
     obs, info = env.reset(seed=seed, options={"save_screenshot": False})
     done = False
 
-    state = ObservationState.from_obs(obs)
+    state: ObservationState = ObservationState.from_obs(obs)
     asp_transformer.build_static(state, config.horizon)
-    lake_full = state.lakes_full
     actions = []
     step = 0
     sampled_trajectories = 0
@@ -52,14 +51,11 @@ def run(config: Config, seed: int | None = None):
     gen_times = []
     gen_count = 0
     fixing_count = 0
-    ctd_success = 0
-    ctd_failure = 0
     frogs_killed = 0
     rot_counts = []
     checkCount = 0
     gen_count = 0
     rejected_count = 0
-    sips = {}
     intervention_count = 0
 
     if config.logLevel > 2:
@@ -89,166 +85,100 @@ def run(config: Config, seed: int | None = None):
             max_per_bucket=1000,
         )
 
-    # old
-    clingoHelperOld = ClingoHelperOld(state, q_agent, config.horizon + 1, 10)
-    clingoHelperOld.setup()
-
     # cache frequently accessed config values for the hot loop
     method = config.method
     sampling_mode = config.sampling.mode
     horizon = config.horizon
-    use_new_framework = method in (Method.NEW, Method.NEW_CACHE)
 
     while not done:
         start_full_time = time.time()
         step += 1
         rot_count = 1
-        if use_new_framework:
-            checkCount += 1
-            start_time_check = time.time()
-            asp_transformer.reset(config.ctd)
-            asp_transformer.build_dynamic_worlds(state, sips)
-            _, executed_actions = gar.simulate_samples(horizon, q_agent, actions)
-            match sampling_mode:
-                case SamplingMode.RANDOM:
-                    new_violations, rot, samples = asp_transformer.call_clingo_check(
-                        state, executed_actions, [], rot_count, sips
-                    )
-                case SamplingMode.STRATIFIED:
-                    check = StratifiedCheck(
-                        gar._state,
-                        config.sampling.epsilon,
-                        config.sampling.indifference,
-                        config.sampling.confidence,
-                        config.sampling.strata,
-                        config.horizon,
-                        sips,
-                    )
-                    new_violations, rot, samples = check.check(executed_actions)
-
-                case SamplingMode.MCTS:
-                    sim_state = SimulationState.from_state(gar._state, config.ctd)
-                    node = MCTSNode(
-                        sim_state,
-                        None,
-                        sim_state.get_possible_actions_with_probabilities(
-                            executed_actions[0]
-                        ),
-                    )
-                    new_violations, rot, samples = node.check_MCTS(
-                        executed_actions,
-                        config.horizon,
-                        config.sampling.confidence,
-                        config.sampling.indifference,
-                        config.sampling.max_visits,
-                    )
-                    rot = rot <= config.sampling.delta
-                case _:
-                    raise NotImplementedError(
-                        f"Sampling mode {sampling_mode!r} is not wired in Main.py"
-                    )
-            end_time_check = time.time()
-            check_times.append(end_time_check - start_time_check)
-            sampled_trajectories += samples
-
-            if config.logLevel > 2:
-                sim_state: SimulationState = SimulationState.from_state(
-                    gar._state, config.ctd
+        checkCount += 1
+        start_time_check = time.time()
+        asp_transformer.reset(config.ctd)
+        asp_transformer.build_dynamic_worlds(state)
+        _, executed_actions = gar.simulate_samples(horizon, q_agent, actions)
+        match sampling_mode:
+            case SamplingMode.RANDOM:
+                new_violations, rot, samples = asp_transformer.call_clingo_check(
+                    state, executed_actions, [], rot_count
                 )
-                real_probability = (
-                    sim_state.calculate_violation_probability_brute_force(
-                        executed_actions
-                    )
+            case SamplingMode.STRATIFIED:
+                check = StratifiedCheck(
+                    gar._state,
+                    config.sampling.epsilon,
+                    config.sampling.indifference,
+                    config.sampling.confidence,
+                    config.sampling.strata,
+                    config.horizon,
                 )
-                lib.try_save(gar._state, real_probability, executed_actions)
+                new_violations, rot, samples = check.check(executed_actions)
 
-            if rot:
-                # rule of three is fulfilled, execute RL policy
-                if len(actions) > 0:
-                    action = actions.pop(0)
-                else:
-                    action = executed_actions[0]
+            case SamplingMode.MCTS:
+                sim_state = SimulationState.from_state(gar._state, config.ctd)
+                node = MCTSNode(
+                    sim_state,
+                    None,
+                    sim_state.get_possible_actions_with_probabilities(
+                        executed_actions[0]
+                    ),
+                )
+                new_violations, rot, samples = node.check_MCTS(
+                    executed_actions,
+                    config.horizon,
+                    config.sampling.confidence,
+                    config.sampling.indifference,
+                    config.sampling.max_visits,
+                )
+                rot = rot <= config.sampling.delta
+            case _:
+                raise NotImplementedError(
+                    f"Sampling mode {sampling_mode!r} is not wired in Main.py"
+                )
+        end_time_check = time.time()
+        check_times.append(end_time_check - start_time_check)
+        sampled_trajectories += samples
+
+        if config.logLevel > 2:
+            sim_state: SimulationState = SimulationState.from_state(
+                gar._state, config.ctd
+            )
+            real_probability = sim_state.calculate_violation_probability_brute_force(
+                executed_actions
+            )
+            lib.try_save(gar._state, real_probability, executed_actions)
+
+        if rot:
+            # rule of three is fulfilled, execute RL policy
+            if len(actions) > 0:
+                action = actions.pop(0)
             else:
-                # rule of three is not fulfilled, create emergency fix
+                action = executed_actions[0]
+        else:
+            # rule of three is not fulfilled, create emergency fix
 
-                # here we should start the loop
-                tested_policies = [executed_actions]
-                violations = new_violations
+            # here we should start the loop
+            tested_policies = [executed_actions]
+            violations = new_violations
 
-                fixing_count += 1
-                while True:
-                    gen_count += 1
-                    fix_time_start = time.time()
-                    policy_fix = asp_transformer.call_clingo_generate(state, violations)
-                    fix_time_end = time.time()
-                    gen_times.append(fix_time_end - fix_time_start)
+            fixing_count += 1
+            while True:
+                gen_count += 1
+                fix_time_start = time.time()
+                policy_fix = asp_transformer.call_clingo_generate(state, violations)
+                fix_time_end = time.time()
+                gen_times.append(fix_time_end - fix_time_start)
 
-                    gen_count += 1
-                    if rot_count != -1:
-                        if policy_fix not in tested_policies:
-                            rot_count += 1
-                            tested_policies.append(policy_fix)
-                        else:
-                            rot_count = -1
+                gen_count += 1
+                if rot_count != -1:
+                    if policy_fix not in tested_policies:
+                        rot_count += 1
+                        tested_policies.append(policy_fix)
                     else:
-                        if policy_fix in tested_policies:
-                            # cache
-                            if method == Method.NEW_CACHE:
-                                actions = policy_fix
-                                action = actions.pop(0)
-                            else:
-                                action = policy_fix.pop(0)
-                            break
-                    checkCount += 1
-                    start_time_check = time.time()
-                    match sampling_mode:
-                        case SamplingMode.RANDOM:
-                            new_violations, rot, samples = (
-                                asp_transformer.call_clingo_check(
-                                    state, policy_fix, violations, rot_count, sips
-                                )
-                            )
-                        case SamplingMode.STRATIFIED:
-                            new_violations, rot, samples = check.check(policy_fix)
-                        case SamplingMode.MCTS:
-                            sim_state = SimulationState.from_state(
-                                gar._state, config.ctd
-                            )
-                            node = MCTSNode(
-                                sim_state,
-                                None,
-                                sim_state.get_possible_actions_with_probabilities(
-                                    policy_fix[0]
-                                ),
-                            )
-                            new_violations, rot, samples = node.check_MCTS(
-                                policy_fix,
-                                config.horizon,
-                                config.sampling.confidence,
-                                config.sampling.indifference,
-                                config.sampling.max_visits,
-                            )
-                            rot = rot <= config.sampling.delta
-                        case _:
-                            raise NotImplementedError(
-                                f"Sampling mode {sampling_mode!r} is not wired in Main.py"
-                            )
-                    end_time_check = time.time()
-                    check_times.append(end_time_check - start_time_check)
-                    sampled_trajectories += samples
-                    if config.logLevel > 2:
-                        # calculate real_probability via brute force
-                        sim_state: SimulationState = SimulationState.from_state(
-                            gar._state, config.ctd
-                        )
-                        real_probability = (
-                            sim_state.calculate_violation_probability_brute_force(
-                                executed_actions
-                            )
-                        )
-                        lib.try_save(gar._state, real_probability, executed_actions)
-
-                    if rot:
+                        rot_count = -1
+                else:
+                    if policy_fix in tested_policies:
                         # cache
                         if method == Method.NEW_CACHE:
                             actions = policy_fix
@@ -256,81 +186,75 @@ def run(config: Config, seed: int | None = None):
                         else:
                             action = policy_fix.pop(0)
                         break
+                checkCount += 1
+                start_time_check = time.time()
+                match sampling_mode:
+                    case SamplingMode.RANDOM:
+                        new_violations, rot, samples = (
+                            asp_transformer.call_clingo_check(
+                                state, policy_fix, violations, rot_count
+                            )
+                        )
+                    case SamplingMode.STRATIFIED:
+                        new_violations, rot, samples = check.check(policy_fix)
+                    case SamplingMode.MCTS:
+                        sim_state = SimulationState.from_state(gar._state, config.ctd)
+                        node = MCTSNode(
+                            sim_state,
+                            None,
+                            sim_state.get_possible_actions_with_probabilities(
+                                policy_fix[0]
+                            ),
+                        )
+                        new_violations, rot, samples = node.check_MCTS(
+                            policy_fix,
+                            config.horizon,
+                            config.sampling.confidence,
+                            config.sampling.indifference,
+                            config.sampling.max_visits,
+                        )
+                        rot = rot <= config.sampling.delta
+                    case _:
+                        raise NotImplementedError(
+                            f"Sampling mode {sampling_mode!r} is not wired in Main.py"
+                        )
+                end_time_check = time.time()
+                check_times.append(end_time_check - start_time_check)
+                sampled_trajectories += samples
+                if config.logLevel > 2:
+                    # calculate real_probability via brute force
+                    sim_state: SimulationState = SimulationState.from_state(
+                        gar._state, config.ctd
+                    )
+                    real_probability = (
+                        sim_state.calculate_violation_probability_brute_force(
+                            executed_actions
+                        )
+                    )
+                    lib.try_save(gar._state, real_probability, executed_actions)
+
+                if rot:
+                    # cache
+                    if method == Method.NEW_CACHE:
+                        actions = policy_fix
+                        action = actions.pop(0)
                     else:
-                        rejected_count += 1
-                        for v in new_violations:
-                            if v not in violations:
-                                violations.append(v)
-            end_time_gen = time.time()
-            fix_times.append(end_time_gen - start_time_check)
-            best_actions = q_agent.getBestActions(state)
-            if action not in best_actions:
-                intervention_count += 1
-            rot_counts.append(rot_count)
-        elif method == Method.OLD:
-            # OLD METHOD EXECUTION
-            start_time_gen = time.time()
-            best_actions = q_agent.getBestActions(state)
-            action = clingoHelperOld.get_action(state)
-            if action not in best_actions:
-                intervention_count += 1
-            fix_times.append(time.time() - start_time_gen)
-        elif method == Method.RL:
-            action = q_agent.getAction(state)
+                        action = policy_fix.pop(0)
+                    break
+                else:
+                    rejected_count += 1
+                    for v in new_violations:
+                        if v not in violations:
+                            violations.append(v)
+        end_time_gen = time.time()
+        fix_times.append(end_time_gen - start_time_check)
+        best_actions = q_agent.getBestActions(state)
+        if action not in best_actions:
+            intervention_count += 1
+        rot_counts.append(rot_count)
 
         obs, reward, terminated, truncated, info = env.step(action)
-        state = ObservationState.from_obs(obs)
-
-        # add this to the environment
-        remove = []
-        for s in sips:
-            if (
-                state.agent[0] == state.frogs[sips[s][0]][0]
-                and state.agent[1] == state.frogs[sips[s][0]][1]
-            ):
-                remove.append(s)
-                ctd_success += 1
-                msg = "CDT SUCCESS!"
-                gar._state.capt_frogs[sips[s][0]] = True
-                # print(f"\033[31m{msg}\033[0m")
-            elif sips[s][1] == 0:
-                remove.append(s)
-                ctd_failure += 1
-            sips[s][1] -= 1
-        for r in remove:
-            sips.pop(r)
-        new_lake_full = state.lakes_full
-        for lake in range(len(lake_full)):
-            if lake_full[lake] and not new_lake_full[lake]:
-                # print(f"Lake {lake} is now empty at step {step}.")
-                for f, (c, r) in enumerate(state.frogs):
-                    prox = False
-                    if not state.dead_frogs[f]:
-                        if (
-                            abs(state.lakes[lake][0] - c)
-                            + abs(state.lakes[lake][1] - r)
-                            == 1
-                        ):
-                            prox = True
-                        elif (
-                            abs(state.lakes[lake][0] - c)
-                            + abs(state.lakes[lake][1] - r)
-                            == 2
-                            and abs(state.lakes[lake][0] - c) == 1
-                        ):
-                            prox = True
-                        elif (
-                            abs(state.lakes[lake][0] - c)
-                            + abs(state.lakes[lake][1] - r)
-                            == 2
-                            and abs(state.lakes[lake][1] - r) == 1
-                        ):
-                            prox = True
-                    if prox:
-                        # print(
-                        #    f"Frog {f} is at lake {lake}, which is at coordinates {c}, {r}.")
-                        sips[lake] = [f, 4, c, r]
-        lake_full = new_lake_full.copy()
+        state: ObservationState = ObservationState.from_obs(obs)
 
         # for visualization purposes
         # sleep = max(0, 0.1)
@@ -341,15 +265,9 @@ def run(config: Config, seed: int | None = None):
         end_full_time = time.time()
         full_times.append(end_full_time - start_full_time)
 
-    ctd_triggered = ctd_success + ctd_failure
-    if ctd_triggered > 0:
-        ctd_success = ctd_success / ctd_triggered
-    else:
-        ctd_success = 1
-
     frogs_killed = state.dead_frogs.sum()
-    if config.ctd:
-        frogs_killed -= ctd_success * frogs_killed
+    ctd_triggered = state.stun_counter
+    ctd_success = state.capt_frogs.sum()
 
     env.close()
     return (

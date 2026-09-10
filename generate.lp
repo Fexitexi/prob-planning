@@ -82,6 +82,5 @@ frog(X,Y-1,I,T+1,W) :- frog(X,Y,I,T,W), f_action(3,I,T,W).    % move down
 #defined lake_action/4.
 #defined frog_timer/3.
 #defined ctd/3.
-#defined ctd/1.
 #defined ctd_world/1.
 #defined sips_lake/2.

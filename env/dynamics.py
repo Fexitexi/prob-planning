@@ -2,7 +2,6 @@ import numpy as np
 
 
 class GardenerDynamics:
-
     # Map action numbers to actual movements on the grid
     # This makes the code more readable than using raw numbers
 
@@ -10,7 +9,6 @@ class GardenerDynamics:
         if seed is None:
             seed = np.random.SeedSequence().entropy
         self.np_random = np.random.Generator(np.random.PCG64(seed))
-
 
     def move_agent(self, state, action):
         mask = get_action_mask(state)
@@ -34,7 +32,6 @@ class GardenerDynamics:
 
         return terminated
 
-
     def move_frogs(self, state):
         frogs = state.frogs
 
@@ -45,18 +42,18 @@ class GardenerDynamics:
 
         for i in range(len(frogs)):
             fx, fy = frogs[i]
-            if state.dead_frogs[i] or state.frog_timer[i] > 0:
+            if state.dead_frogs[i] or state.capt_frogs[i] or state.frog_timer[i] > 0:
                 new_positions.append([fx, fy])
                 continue
             pos_tuple = (int(fx), int(fy))
-            
+
             # Get valid moves from pre-computed array
             valid_moves = []
             if 0 <= fx < state.size and 0 <= fy < state.size:
                 for a in range(4):
                     if state.pos_actions[int(fx), int(fy), a] == 1:
                         valid_moves.append(a)
-            
+
             if not valid_moves:
                 new_positions.append([fx, fy])
                 continue
@@ -68,15 +65,15 @@ class GardenerDynamics:
                     if state.lakes_full[lake_idx]:
                         preferred_action = action
                         break
-            
+
             chosen_action = None
-            
+
             # Try to take preferred action with 70% probability
             # We ensure preferred_action is actually valid
             if preferred_action is not None and preferred_action in valid_moves:
                 if self.np_random.random() < 0.7:
                     chosen_action = preferred_action
-            
+
             # If not chosen yet (either no preferred, or 30% chance triggered)
             if chosen_action is None:
                 if preferred_action is not None:
@@ -91,7 +88,7 @@ class GardenerDynamics:
                 else:
                     # No preferred action, just pick any random valid move
                     chosen_action = self.np_random.choice(valid_moves)
-            
+
             if chosen_action is not None:
                 d = _action_to_direction[chosen_action]
                 new_positions.append([fx + d[0], fy + d[1]])
@@ -101,19 +98,22 @@ class GardenerDynamics:
         state.frogs = np.array(new_positions, dtype=int)
 
 
-_action_to_direction = {0: np.array([1, 0]),
-                                     # Move right (positive x)
-                                     1: np.array([0, 1]),
-                                     # Move up (positive y)
-                                     2: np.array([-1, 0]),
-                                     # Move left (negative x)
-                                     3: np.array([0, -1]),
-                                     # Move down (negative y)
-                                     4: np.array([0, 0]),  # Do nothing
-                                     }
+_action_to_direction = {
+    0: np.array([1, 0]),
+    # Move right (positive x)
+    1: np.array([0, 1]),
+    # Move up (positive y)
+    2: np.array([-1, 0]),
+    # Move left (negative x)
+    3: np.array([0, -1]),
+    # Move down (negative y)
+    4: np.array([0, 0]),  # Do nothing
+}
+
 
 def get_action_mask_pos(pos, state):
     return state.pos_actions[pos[0]][pos[1]]
+
 
 def get_action_mask(state):
     pos = state.agent

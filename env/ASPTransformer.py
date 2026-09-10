@@ -210,15 +210,17 @@ class ASPTransformer:
 
         return "\n".join(lines)
 
-    def build_dynamic_worlds(self, state, sips) -> str:
+    def build_dynamic_worlds(self, state) -> str:
         self._state = state
         lines = []
 
         # agent position
         lines.append(f"agent({state.agent[0]}, {state.agent[1]}, 0).")
 
-        for s in sips:
-            lines.append(f"ctd({sips[s][0]}, {s}, {sips[s][1]}).")
+        for i, s in enumerate(state.frog_timer):
+            if s > 0:
+                lines.append(f"frog_timer({i}, {s}).")
+                lines.append(f"ctd({i}, {s - 1}).")
 
         # check the frogs in the "sphere" of the agent
         # agent window
@@ -232,7 +234,11 @@ class ASPTransformer:
                 if dist <= 2 * self._horizon:
                     indices = np.where(np.all(state.frogs == [c, r], axis=1))[0]
                     for i in indices:
-                        if i not in self._frogs and not self._state.dead_frogs[i]:
+                        if (
+                            i not in self._frogs
+                            and not self._state.dead_frogs[i]
+                            and not self._state.capt_frogs[i]
+                        ):
                             self._frogs.append(i)
 
         if self._sampling.mode == SamplingMode.RANDOM:
@@ -394,7 +400,7 @@ class ASPTransformer:
                 actions[sym.arguments[1].number] = sym.arguments[0].number
         return actions
 
-    def call_clingo_check(self, state, actions, exclude_worlds, rot_count, sips):
+    def call_clingo_check(self, state, actions, exclude_worlds, rot_count):
         if rot_count != -1:
             max_world = rot_count * self._n_rot
         else:
@@ -420,8 +426,10 @@ class ASPTransformer:
         lines = []
         lines.append(f"agent({state.agent[0]}, {state.agent[1]}, 0).")
 
-        for s in sips:
-            lines.append(f"ctd({sips[s][0]}, {s}, {sips[s][1]}).")
+        for i, s in enumerate(state.frog_timer):
+            if s > 0:
+                lines.append(f"frog_timer({i}, {s}).")
+                lines.append(f"ctd({i}, {s - 1}).")
 
         for i, a in enumerate(actions):
             lines.append(f"action({a}, {i}).")
@@ -506,7 +514,7 @@ class ASPTransformer:
                     rot = False
         return violations, rot, self._n_rot
 
-    def call_stratified_check(self, state, actions, sips):
+    def call_stratified_check(self, state, actions):
         self._latest_model = None
         dyn = self.build_dynamic(state)
         with open("check.lp", "r") as f:
@@ -543,8 +551,8 @@ class ASPTransformer:
             lines = []
             lines.append(f"agent({state.agent[0]}, {state.agent[1]}, 0).")
 
-            for s in sips:
-                lines.append(f"ctd({sips[s][0]}, {s}, {sips[s][1]}).")
+            for i, s in enumerate(state.frog_timer):
+                lines.append(f"frog_timer({i}, {s}).")
 
             for i, a in enumerate(actions):
                 lines.append(f"action({a}, {i}).")

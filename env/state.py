@@ -2,11 +2,13 @@ from dataclasses import dataclass
 
 import numpy as np
 
+
 class GardenerState:
     agent: np.ndarray
     pos_actions: dict
     frogs: np.ndarray
     dead_frogs: np.ndarray
+    stun_counter: int
     capt_frogs: np.ndarray
     lakes: np.ndarray
     lakes_full: np.ndarray
@@ -39,16 +41,18 @@ class GardenerState:
         new.walls = self.walls.copy()
         new.frogs = self.frogs.copy()
         new.dead_frogs = self.dead_frogs.copy()
+        new.stun_counter = self.stun_counter
         new.capt_frogs = self.capt_frogs.copy()
         new.lakes = self.lakes.copy()
-        new.lake_dist = self.lake_dist # these are read-only maps
-        new.lake_best_step = self.lake_best_step # these are read-only maps
+        new.lake_dist = self.lake_dist  # these are read-only maps
+        new.lake_best_step = self.lake_best_step  # these are read-only maps
         new.lakes_full = self.lakes_full.copy()
-        new.lake_dict = self.lake_dict # read-only
+        new.lake_dict = self.lake_dict  # read-only
         new.lake_timer = self.lake_timer.copy()
         new.frog_timer = self.frog_timer.copy()
-        new.grass_dist = self.grass_dist # read-only
+        new.grass_dist = self.grass_dist  # read-only
         return new
+
 
 @dataclass
 class ObservationState:
@@ -57,6 +61,7 @@ class ObservationState:
     lakes: np.ndarray
     lakes_full: np.ndarray
     dead_frogs: np.ndarray
+    stun_counter: int
     capt_frogs: np.ndarray
     lake_timer: np.ndarray
     frog_timer: np.ndarray
@@ -79,6 +84,7 @@ class ObservationState:
             lakes=obs["lakes"],
             lakes_full=obs["lakes_full"],
             dead_frogs=obs["dead_frogs"],
+            stun_counter=obs["stun_counter"],
             capt_frogs=obs["capt_frogs"],
             lake_timer=obs["lake_timer"],
             frog_timer=obs["frog_timer"],
@@ -91,7 +97,7 @@ class ObservationState:
             lake_respawn=obs["lake_respawn"],
             pos_actions=obs["pos_actions"],
             lake_dist=obs["lake_dist"],
-            grass_dist=obs["grass_dist"]
+            grass_dist=obs["grass_dist"],
         )
 
     def fast_clone(self):
@@ -101,6 +107,7 @@ class ObservationState:
             lakes=self.lakes.copy(),
             lakes_full=self.lakes_full.copy(),
             dead_frogs=self.dead_frogs.copy(),
+            stun_counter=self.stun_counter,
             capt_frogs=self.capt_frogs.copy(),
             lake_timer=self.lake_timer.copy(),
             frog_timer=self.frog_timer.copy(),
@@ -112,6 +119,6 @@ class ObservationState:
             grass_respawn=self.grass_respawn,
             lake_respawn=self.lake_respawn,
             pos_actions=self.pos_actions.copy(),
-            lake_dist=self.lake_dist, # read-only
-            grass_dist=self.grass_dist # read-only
+            lake_dist=self.lake_dist,  # read-only
+            grass_dist=self.grass_dist,  # read-only
         )

@@ -21,7 +21,7 @@ class StratifiedCheck:
         "wealthRejecting",
     )
 
-    def __init__(self, state, epsilon, indifference, confidence, strata, horizon, sips):
+    def __init__(self, state, epsilon, indifference, confidence, strata, horizon):
         self.state = state
         self.solver: ASPSolver = ASPSolver(True, horizon)
         self.strata = strata
@@ -40,7 +40,7 @@ class StratifiedCheck:
             (1 - self.nullmean) / (1 - self.altmean)
         )
         self.solver.instantiate_level(self.state)
-        self.solver.instantiate_state(self.state, self.strata, sips)
+        self.solver.instantiate_state(self.state, self.strata)
         self.solver.prepare_agent_movement()
         self.solver.prepare_frog_movement(self.state, self.strata)
 
@@ -52,20 +52,14 @@ class StratifiedCheck:
         while loop < 1000:
             loop += 1
             loopViolations, outcome = self.sample_ASP()
-            # print(f"iteration: {loop}, outcome:{outcome}")
             violations.extend(loopViolations)
             self.update_martingale(outcome)
 
-            # print(
-            #    f"wealthRejecting:{self.wealthRejecting}, wealthAccepting:{self.wealthAccepting}"
-            # )
             if self.wealthRejecting >= self.rejectionBoundary:
-                # print(f"rejected after {loop} iterations")
                 self.reset()
                 return violations, False, loop * self.strata
             if self.wealthAccepting >= self.rejectionBoundary:
                 self.reset()
-                # print(f"accepted after {loop} iterations")
                 return violations, True, loop * self.strata
 
         self.reset()
