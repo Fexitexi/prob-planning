@@ -56,7 +56,7 @@ class ASPSolver:
         self._check.ground([("base", [])], context=self)
         # self._generate.add("base", [], lines)
 
-    def instantiate_state(self, state: GardenerState, strata):
+    def instantiate_state(self, state: GardenerState):
         lines = []
         # adding agent and agent actions
         lines.append(f"agent({state.agent[0]}, {state.agent[1]}, 0).")
@@ -71,8 +71,7 @@ class ASPSolver:
         for f, (c, r) in enumerate(state.frogs):
             if state.capt_frogs[f] or state.dead_frogs[f]:
                 continue
-            for i in range(strata):
-                lines.append(f"frog({c}, {r}, {f}, 0, {i}).")
+            lines.append(f"frog({c}, {r}, {f}, 0, 0).")
 
         # adding frog_timer
         for f in range(len(state.frog_timer)):
@@ -158,86 +157,82 @@ class ASPSolver:
 
         self.agent_movement = []
 
-    def prepare_frog_action(self, state, strata):
+    def prepare_frog_action(self, state):
         with self._check.backend() as backend:
             for f in range(len(state.frogs)):
                 if state.dead_frogs[f] or state.capt_frogs[f]:
                     continue
                 for t in range(self.horizon):
-                    for i in range(strata):
-                        for j in range(5):
-                            sym = clingo.Function(
-                                "f_action",
-                                [
-                                    clingo.Number(j),
-                                    clingo.Number(f),
-                                    clingo.Number(t),
-                                    clingo.Number(i),
-                                ],
-                            )
-                            atom_id = backend.add_atom(sym)
-                            backend.add_external(atom_id, clingo.TruthValue.False_)
-                            self.f_rnd_symbols[(f, t, i, j)] = sym
+                    for j in range(5):
+                        sym = clingo.Function(
+                            "f_action",
+                            [
+                                clingo.Number(j),
+                                clingo.Number(f),
+                                clingo.Number(t),
+                                clingo.Number(0),
+                            ],
+                        )
+                        atom_id = backend.add_atom(sym)
+                        backend.add_external(atom_id, clingo.TruthValue.False_)
+                        self.f_rnd_symbols[(f, t, 0, j)] = sym
 
         self._check.ground([("frog_movement", [])], context=self)
 
-    def instantiate_frog_actions(self, state: SimulationState, strata):
+    def instantiate_frog_actions(self, state: SimulationState):
         for i, f in enumerate(state.frogs):
             if state.dead_frogs[i] or state.captured_frogs[i]:
                 continue
             pref, other = state.get_frog_actions(f)
             for t in range(self.horizon):
-                for w in range(strata):
-                    ran = (w + random.random()) / strata
+                ran = random.random()
 
-                    r = int(ran * 100)
-                    if pref is None:
-                        action = other[int(ran * len(other))]
-                    elif r < 70:
-                        action = pref
-                    else:
-                        idx = int((r - 70) / (30.0 / len(other)))
-                        action = other[idx]
+                r = int(ran * 100)
+                if pref is None:
+                    action = other[int(ran * len(other))]
+                elif r < 70:
+                    action = pref
+                else:
+                    idx = int((r - 70) / (30.0 / len(other)))
+                    action = other[idx]
 
-                    sym = self.f_rnd_symbols[(i, t, w, action)]
-                    self._check.assign_external(sym, True)
-                    self.frog_movement.append(sym)
+                sym = self.f_rnd_symbols[(i, t, 0, action)]
+                self._check.assign_external(sym, True)
+                self.frog_movement.append(sym)
 
-    def prepare_frog_movement(self, state, strata):
+    def prepare_frog_movement(self, state):
         with self._check.backend() as backend:
             for f in range(len(state.frogs)):
                 if state.dead_frogs[f] or state.capt_frogs[f]:
                     continue
                 for t in range(self.horizon):
-                    for i in range(strata):
-                        for j in range(100):
-                            sym = clingo.Function(
-                                "f_rnd",
-                                [
-                                    clingo.Number(f),
-                                    clingo.Number(t),
-                                    clingo.Number(i),
-                                    clingo.Number(j),
-                                ],
-                            )
+                    for j in range(100):
+                        sym = clingo.Function(
+                            "f_rnd",
+                            [
+                                clingo.Number(f),
+                                clingo.Number(t),
+                                clingo.Number(0),
+                                clingo.Number(j),
+                            ],
+                        )
 
-                            atom_id = backend.add_atom(sym)
-                            backend.add_external(atom_id, clingo.TruthValue.False_)
-                            self.f_rnd_symbols[(f, t, i, j)] = sym
+                        atom_id = backend.add_atom(sym)
+                        backend.add_external(atom_id, clingo.TruthValue.False_)
+                        self.f_rnd_symbols[(f, t, 0, j)] = sym
 
         self._check.ground([("frog_movement", [])], context=self)
 
-    def instantiate_frog_movement(self, state, strata):
+    def instantiate_frog_movement(self, state):
         for f in range(len(state.frogs)):
             if state.dead_frogs[f] or state.captured_frogs[f]:
                 continue
             for t in range(self.horizon):
-                for w in range(strata):
-                    ran = (w + random.random()) / strata
-                    r = int(ran * 100)
-                    sym: Symbol = self.f_rnd_symbols[(f, t, w, r)]
-                    self._check.assign_external(sym, True)
-                    self.frog_movement.append(sym)
+                ran = random.random()
+                r = int(ran * 100)
+                sym: Symbol = self.f_rnd_symbols[(f, t, 0, r)]
+                self._check.assign_external(sym, True)
+                self.frog_movement.append(sym)
 
     def clear_frog_movement(self):
         for i in self.frog_movement:
@@ -260,7 +255,7 @@ class ASPSolver:
             if sym.arguments[3].number in violations:
                 lines.append(sym)
 
-        return lines
+        return lines, len(violations)
 
     def generate(self):
         pass

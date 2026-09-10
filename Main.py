@@ -1,4 +1,3 @@
-from env.GardenerEnv import GardenerEnv
 import argparse
 import random
 import time
@@ -7,12 +6,13 @@ import gymnasium as gym
 
 from config import Config, Method, SamplingMode
 from env.ASPTransformer import ASPTransformer
+from env.GardenerEnv import GardenerEnv
 from env.GardenerQAgent import GardenerQAgent
 from env.MCTSNode import MCTSNode
+from env.Sequential import SeqentialCheck
 from env.simulation_state import SimulationState
 from env.state import ObservationState
 from env.StateLibrary import StateLibrary, custom_edges
-from env.Stratified import StratifiedCheck
 
 gym.envs.registration.register(
     id="GardenerEnv-v0",
@@ -105,12 +105,10 @@ def run(config: Config, seed: int | None = None):
                     state, executed_actions, [], rot_count
                 )
             case SamplingMode.STRATIFIED:
-                check = StratifiedCheck(
+                check = SeqentialCheck(
                     gar._state,
                     config.sampling.epsilon,
-                    config.sampling.indifference,
-                    config.sampling.confidence,
-                    config.sampling.strata,
+                    config.sampling.delta,
                     config.horizon,
                 )
                 new_violations, rot, samples = check.check(executed_actions)
@@ -443,12 +441,11 @@ if __name__ == "__main__":
                         entry.state, entry.actions, [], 0, []
                     )
                 case SamplingMode.STRATIFIED:
-                    check = StratifiedCheck(
+                    check = SeqentialCheck(
                         entry.state,
                         config.sampling.epsilon,
                         config.sampling.indifference,
                         config.sampling.confidence,
-                        config.sampling.strata,
                         config.horizon,
                         [],
                     )
