@@ -1,14 +1,20 @@
 import math
 import random
 
-from scipy.stats import norm
-
 from env.simulation_state import SimulationState
 
 
 class MCTSNode:
     C = 1
-    __slots__ = ("action", "actions", "children", "state", "value", "visitCount")
+    __slots__ = (
+        "action",
+        "actions",
+        "children",
+        "maxWeight",
+        "state",
+        "value",
+        "visitCount",
+    )
 
     def __init__(self, state: SimulationState, action, actions):
         self.state: SimulationState = state
@@ -17,86 +23,127 @@ class MCTSNode:
         self.actions: dict = actions  # {action: probability}
         self.value = 0
         self.visitCount = 1
+        self.maxWeight = 1
 
-    def check_MCTS(self, agentActions, depth, confidence, indifference, maxVisit):
-        z = norm.ppf((1 + confidence) / 2)
-        runningProbability = 0.0
+    def check_MCTS(self, agentActions, depth, epsilon, maxVisit):
         violations = []
-        sumSqared = 0.0
-        minVisit = maxVisit
-        while self.visitCount < minVisit and self.visitCount < maxVisit:
-            nodeSequence = []
-            nodeSequence.append(self)
-            actionSequence = []
-            weight = 1
-            node: MCTSNode = self
-            iteration = 0
-            result = 0
+        lambdaAccepting = 1
+        lambdaRejecting = 1
+        wealthAccepting = 1
+        wealthRejecting = 1
+        acceptingSumSquared = 1
+        rejectingSumSquared = 1
+        highestOutcome = 0
+        highestPossibleOutcome = 0
+        loop = 0
+        while loop < maxVisit:
+            oldMaxWeight = self.maxWeight
+            outcome, actionSequence = self.sample(depth, 1, [], agentActions)
 
-            # selection process
-            while iteration < depth:
-                iteration += 1
-                # calculate which node to choose now
-                probabilities = node.calculate_probabilities_normalized()
-                # print(f"probabilities in iteration {iteration}: {probabilities}")
-                selectedAction, proposed_probability = node.select_action(probabilities)
-                actionSequence.append(selectedAction)
+            highestPossibleOutcome = max(highestPossibleOutcome, self.maxWeight)
 
-                # update the weight for importance sampling
-                weight = weight * (node.actions[selectedAction] / proposed_probability)
-                # print(f"weight in iteration {iteration}: {weight}")
-
-                if selectedAction in node.children:
-                    # set new node
-                    node = node.children.get(selectedAction)
-
-                    # process new node
-                    nodeSequence.append(node)
-                    result += 1 if node.state.violation else 0
-                else:
-                    # expand
-                    newState = SimulationState.apply_action(node.state, selectedAction)
-                    newActions = newState.get_possible_actions_with_probabilities(
-                        agentActions[iteration - 1]
-                    )
-                    newNode = MCTSNode(newState, selectedAction, newActions)
-                    node.children[selectedAction] = newNode
-                    # simulate
-                    res, actions = newNode.simulateMC(
-                        agentActions[iteration:], depth - iteration
-                    )
-                    actionSequence.extend(actions)
-                    result += res
-                    break
-
-            # add world to violations
-            if (
-                result > 0 and actionSequence not in violations
-            ):  # trade-off: a check each violation for minimizing the ASP Gen program
+            if outcome > 0:
                 violations.append(actionSequence)
+                highestOutcome = max(highestOutcome, outcome)
 
-            # update visits
-            for n in nodeSequence:
-                n.visitCount += 1
-                if result > 0:
-                    n.value += 1
+            # update martingales
+            difference = outcome - epsilon
+            acceptingReward = 1 - (lambdaAccepting * difference)
+            rejectingReward = 1 + (lambdaRejecting * difference)
+            if acceptingReward <= 0:
+                print(
+                    f"ERROR {loop}: acceptingReward:{acceptingReward}, lambdaAccepting:{lambdaAccepting}, outcome:{difference}, highestPossibleOutcome:{self.maxWeight}, prevhighestOutcome:{oldMaxWeight}"
+                )
+            if rejectingReward <= 0:
+                print(
+                    f"ERROR rejectingReward:{rejectingReward}, lambdaRejecting:{lambdaRejecting}, outcome:{outcome}, highestPossibleOutcome:{self.maxWeight}, prevhighestOutcome:{oldMaxWeight}"
+                )
+            wealthAccepting *= acceptingReward
+            wealthRejecting *= rejectingReward
 
-            # update running violation probability
-            outcome = weight if result > 0 else 0
-            oldmean = runningProbability
-            runningProbability += (outcome - runningProbability) / self.visitCount
+            if wealthRejecting > 1 / epsilon:
+                # print(f"rejected after {loop} iterations")
+                return violations, False, loop
+            if wealthAccepting > 1 / epsilon:
+                # print(f"accepted after {loop} iterations")
+                return violations, True, loop
 
-            # update sum_sqared
-            sumSqared += (outcome - oldmean) * (outcome - runningProbability)
+            # calculate lambdas for next iteration via ONS from Waudby-Smith
+            acceptingSumSquared += acceptingReward**2
+            rejectingSumSquared += rejectingReward**2
 
-            # update minimum visits
-            if runningProbability > 0:
-                minVisit = (sumSqared / self.visitCount) * (
-                    2 * z / (indifference * runningProbability)
-                ) ** 2
-            # print(f"current visit: {self.visitCount}, minVisit: {minVisit}")
+            lambdaAccepting -= (2 * difference / acceptingReward) / (
+                (2 - math.log(3)) * acceptingSumSquared
+            )
+            lambdaRejecting -= (2 * difference / rejectingReward) / (
+                (2 - math.log(3)) * rejectingSumSquared
+            )
 
-        return violations, runningProbability, self.visitCount
+            lambdaAccepting = max(
+                min(lambdaAccepting, 0.99 / (self.maxWeight - epsilon)),
+                -1 / (1 - epsilon),
+            )
+            lambdaRejecting = min(
+                max(lambdaRejecting, -0.99 / (self.maxWeight - epsilon)),
+                1 / epsilon,
+            )
+
+            loop += 1
+
+        # print(f"indifferent after {loop} iterations")
+        # print(f"wealthAccepting:{wealthAccepting}, wealthRejecting:{wealthRejecting}")
+        # print(
+        # f"highest outcome:{highestOutcome}, highestPossibleOutcome:{highestPossibleOutcome}"
+        # )
+        return violations, False, maxVisit
+
+    def sample(self, depth, weight, actionSequence, agentActions):
+        # basic return condition
+        if depth == 0:
+            return self.state.violation * weight, actionSequence
+        else:
+            depth -= 1
+
+        # calculating everything
+        probabilities = self.calculate_probabilities_normalized()
+        # print(f"probabilities in iteration {iteration}: {probabilities}")
+        selectedAction, proposed_probability = self.select_action(probabilities)
+        actionSequence.append(selectedAction)
+
+        # update the weight for importance sampling
+        weight *= self.actions[selectedAction] / proposed_probability
+
+        if selectedAction in self.children:
+            # set new node
+            outcome, actionSequence = self.children.get(selectedAction).sample(
+                depth, weight, actionSequence, agentActions
+            )
+        else:
+            # expand
+            newState = SimulationState.apply_action(self.state, selectedAction)
+            newActions = newState.get_possible_actions_with_probabilities(
+                agentActions[-depth]
+            )
+            newNode = MCTSNode(newState, selectedAction, newActions)
+            self.children[selectedAction] = newNode
+            # simulate
+            outcome, actionSequence = newNode.simulateMC(agentActions[-depth:], depth)
+            if outcome > 0:
+                outcome = weight
+
+        if outcome > 0:
+            self.value += 1
+        self.visitCount += 1
+
+        self.updateMaxWeight()
+
+        return outcome, actionSequence
+
+    def generate_fix(self):
+        pass
+
+    def get_child(self, action):
+        return self.children.get(action)
 
     def select_action(self, probabilities):
         s = 0.0
@@ -132,7 +179,10 @@ class MCTSNode:
     def simulateMC(self, agentActions, depth):
         actions = []
         state = self.state
-        result = 0
+        if self.state.violation:
+            result = 1
+        else:
+            result = 0
 
         for i in range(depth):
             result += 1 if state.violation else 0
@@ -146,3 +196,17 @@ class MCTSNode:
         if result > 0:
             self.value += 1
         return result, actions
+
+    def updateMaxWeight(self):
+        probabilities = self.calculate_probabilities_normalized()
+
+        maxWeight = 0
+        for a in self.actions:
+            if a in self.children:
+                downstreamWeight = self.children[a].maxWeight
+            else:
+                downstreamWeight = 1
+            branchWeight = self.actions[a] / probabilities[a] * downstreamWeight
+            maxWeight = max(maxWeight, branchWeight)
+
+        self.maxWeight = maxWeight

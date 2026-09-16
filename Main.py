@@ -125,11 +125,9 @@ def run(config: Config, seed: int | None = None):
                 new_violations, rot, samples = node.check_MCTS(
                     executed_actions,
                     config.horizon,
-                    config.sampling.confidence,
-                    config.sampling.indifference,
+                    config.sampling.epsilon,
                     config.sampling.max_visits,
                 )
-                rot = rot <= config.sampling.delta
             case _:
                 raise NotImplementedError(
                     f"Sampling mode {sampling_mode!r} is not wired in Main.py"
@@ -207,11 +205,9 @@ def run(config: Config, seed: int | None = None):
                         new_violations, rot, samples = node.check_MCTS(
                             policy_fix,
                             config.horizon,
-                            config.sampling.confidence,
-                            config.sampling.indifference,
+                            config.sampling.epsilon,
                             config.sampling.max_visits,
                         )
-                        rot = rot <= config.sampling.delta
                     case _:
                         raise NotImplementedError(
                             f"Sampling mode {sampling_mode!r} is not wired in Main.py"
@@ -462,11 +458,9 @@ if __name__ == "__main__":
                     new_violations, rot, _ = node.check_MCTS(
                         entry.actions,
                         config.horizon,
-                        config.sampling.confidence,
-                        config.sampling.indifference,
+                        config.sampling.epsilon,
                         config.sampling.max_visits,
                     )
-                    rot = rot <= config.sampling.delta
                 case _:
                     raise NotImplementedError(
                         f"Sampling mode {config.sampling.mode!r} is not wired in Main.py"
