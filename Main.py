@@ -4,7 +4,7 @@ import time
 
 import gymnasium as gym
 
-from config import Config, Method, SamplingMode
+from config import Config, SamplingMode
 from env.ASPTransformer import ASPTransformer
 from env.GardenerEnv import GardenerEnv
 from env.GardenerQAgent import GardenerQAgent
@@ -86,7 +86,6 @@ def run(config: Config, seed: int | None = None):
         )
 
     # cache frequently accessed config values for the hot loop
-    method = config.method
     sampling_mode = config.sampling.mode
     horizon = config.horizon
     node = None
@@ -174,11 +173,8 @@ def run(config: Config, seed: int | None = None):
                 else:
                     if policy_fix in tested_policies:
                         # cache
-                        if method == Method.NEW_CACHE:
-                            actions = policy_fix
-                            action = actions.pop(0)
-                        else:
-                            action = policy_fix.pop(0)
+                        actions = policy_fix
+                        action = actions.pop(0)
                         break
                     else:
                         tested_policies.append(policy_fix)
@@ -221,11 +217,8 @@ def run(config: Config, seed: int | None = None):
 
                 if rot:
                     # cache
-                    if method == Method.NEW_CACHE:
-                        actions = policy_fix
-                        action = actions.pop(0)
-                    else:
-                        action = policy_fix.pop(0)
+                    actions = policy_fix
+                    action = actions.pop(0)
                     break
                 else:
                     rejected_count += 1
@@ -290,12 +283,6 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--sampling", type=int, default=2, help="0 - random / 1 - stratified / 2 - MCTS"
-    )
-    parser.add_argument(
-        "--method",
-        type=int,
-        default=1,
-        help="0 - new framework / 1 - new framework w/ cache / 2 - old framework / 3 - RL",
     )
     parser.add_argument("--horizon", type=int, default=5, help="Horizon")
     parser.add_argument("--rounds", type=int, default=1, help="Number of rounds")
@@ -377,7 +364,7 @@ if __name__ == "__main__":
         all_gen_counts += gen_counts
         all_rejected_counts += rejected_counts
 
-    if all_fix_times and config.method != Method.RL:
+    if all_fix_times:
         avg_fix = sum(all_fix_times) / len(all_fix_times)
         max_fix = max(all_fix_times)
 
@@ -469,22 +456,21 @@ if __name__ == "__main__":
         print(
             f"Average Samples: {(all_samples / all_check_counts) / config.rounds:.2f}"
         )
-        if config.method in (Method.NEW, Method.NEW_CACHE):
-            if all_check_times:
-                avg_check = sum(all_check_times) / len(all_check_times)
-                max_check = max(all_check_times)
-                print(
-                    f"Average checking time: {avg_check:.4f}, Max checking time: {
-                        max_check:.4f}"
-                )
-            if all_gen_times:
-                avg_gen = sum(all_gen_times) / len(all_gen_times)
-                max_gen = max(all_gen_times)
-                print(
-                    f"Average solution generation time: {
-                        avg_gen:.4f}, Max solution generation time: {max_gen:.4f}"
-                )
-        if all_full_times and config.method != Method.RL:
+        if all_check_times:
+            avg_check = sum(all_check_times) / len(all_check_times)
+            max_check = max(all_check_times)
+            print(
+                f"Average checking time: {avg_check:.4f}, Max checking time: {
+                    max_check:.4f}"
+            )
+        if all_gen_times:
+            avg_gen = sum(all_gen_times) / len(all_gen_times)
+            max_gen = max(all_gen_times)
+            print(
+                f"Average solution generation time: {
+                    avg_gen:.4f}, Max solution generation time: {max_gen:.4f}"
+            )
+        if all_full_times:
             avg_full = sum(all_full_times) / len(all_full_times)
             max_full = max(all_full_times)
             print(
@@ -496,25 +482,16 @@ if __name__ == "__main__":
         print(f"CTD1: {(all_ctd_triggered - all_ctd_success) / config.rounds}")
 
     if config.logLevel < 1:
-        if config.method == Method.RL:
-            print(
-                f"{all_step / config.rounds:.2f}, 0.00, 0.00, {
-                    all_frogs_killed / config.rounds:.2f}, {
-                    all_ctd_triggered / config.rounds:.2f}, {
-                    (1 - (all_ctd_success / config.rounds))
-                    * (all_ctd_triggered / config.rounds):.2f}"
-            )
-        else:
-            print(
-                f"{all_step / config.rounds:.2f}, {
-                    (all_rejected_counts / all_gen_counts) * 100:.2f}, {
-                    (all_samples / all_check_counts) / config.rounds:.2f}, {
-                    sum(all_check_times) / len(all_check_times):.4f}, {
-                    sum(all_gen_times) / len(all_gen_times):.4f}, {
-                    sum(all_full_times) / len(all_full_times):.4f}, {
-                    all_frogs_killed / config.rounds:.2f}, {
-                    all_ctd_triggered / config.rounds:.2f}, {
-                    (all_ctd_triggered - all_ctd_success) / config.rounds:.2f}"
-            )
+        print(
+            f"{all_step / config.rounds:.2f}, {
+                (all_rejected_counts / all_gen_counts) * 100:.2f}, {
+                (all_samples / all_check_counts) / config.rounds:.2f}, {
+                sum(all_check_times) / len(all_check_times):.4f}, {
+                sum(all_gen_times) / len(all_gen_times):.4f}, {
+                sum(all_full_times) / len(all_full_times):.4f}, {
+                all_frogs_killed / config.rounds:.2f}, {
+                all_ctd_triggered / config.rounds:.2f}, {
+                (all_ctd_triggered - all_ctd_success) / config.rounds:.2f}"
+        )
     # if config.ctd:
     #    print(f"ctd_success: {all_ctd_success / config.rounds}, ctd_triggered: {all_ctd_triggered / config.rounds}")

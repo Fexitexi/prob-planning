@@ -5,15 +5,6 @@ from dataclasses import dataclass, field
 from enum import IntEnum
 
 
-class Method(IntEnum):
-    """High-level algorithm used in an episode."""
-
-    NEW = 0
-    NEW_CACHE = 1
-    OLD = 2
-    RL = 3
-
-
 class SamplingMode(IntEnum):
     """World-sampling strategy used by the new ASP-based planner."""
 
@@ -69,7 +60,6 @@ class SamplingConfig:
 class Config:
     """Top-level configuration for one benchmark run."""
 
-    method: Method = Method.NEW
     sampling: SamplingConfig = field(default_factory=SamplingConfig)
     horizon: int = 3
     size: int = 15
@@ -82,7 +72,6 @@ class Config:
     @classmethod
     def from_args(cls, args) -> "Config":
         return cls(
-            method=Method(args.method),
             sampling=SamplingConfig(
                 mode=SamplingMode(args.sampling),
                 epsilon=args.epsilon,
