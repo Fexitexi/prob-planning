@@ -8,43 +8,51 @@ class MCTSNode:
     C = 1
     __slots__ = (
         "action",
-        "actions",
         "children",
         "maxWeight",
         "state",
+        "transitions",
         "value",
         "visitCount",
     )
 
-    def __init__(self, state: SimulationState, action, actions):
+    def __init__(self, state: SimulationState, action):
         self.state: SimulationState = state
-        self.action = action  # [agentAction, Frog1Action, Frog2Action]
+        self.action = action  # [agentAction]
         self.children = {}  # {action: MCTSNode}
-        self.actions: dict = actions  # {action: probability}
+        self.transitions: dict = state.get_possible_actions_with_probabilities(
+            action
+        )  # {action: probability}
         self.value = 0
         self.visitCount = 1
         self.maxWeight = 1
 
     def check_MCTS(self, agentActions, depth, epsilon, maxVisit):
         violations = []
-        lambdaAccepting = 1
-        lambdaRejecting = 1
+        lambdaAccepting = max(
+            min(1, 0.99 / (self.maxWeight - epsilon)),
+            -1 / (1 - epsilon),
+        )
+        lambdaRejecting = min(
+            max(1, -0.99 / (self.maxWeight - epsilon)),
+            1 / epsilon,
+        )
         wealthAccepting = 1
         wealthRejecting = 1
         acceptingSumSquared = 1
         rejectingSumSquared = 1
-        highestOutcome = 0
         highestPossibleOutcome = 0
         loop = 0
         while loop < maxVisit:
             oldMaxWeight = self.maxWeight
-            outcome, actionSequence = self.sample(depth, 1, [], agentActions)
+            outcome, transitionSequence = self.sample(depth, 1, [], agentActions, False)
+            if len(transitionSequence) != depth:
+                print(f"ERROR: depth: {depth}, length:{len(transitionSequence)}")
 
             highestPossibleOutcome = max(highestPossibleOutcome, self.maxWeight)
 
             if outcome > 0:
-                violations.append(actionSequence)
-                highestOutcome = max(highestOutcome, outcome)
+                violations.append(transitionSequence)
 
             # update martingales
             difference = outcome - epsilon
@@ -92,42 +100,41 @@ class MCTSNode:
 
         # print(f"indifferent after {loop} iterations")
         # print(f"wealthAccepting:{wealthAccepting}, wealthRejecting:{wealthRejecting}")
-        # print(
-        # f"highest outcome:{highestOutcome}, highestPossibleOutcome:{highestPossibleOutcome}"
-        # )
         return violations, False, maxVisit
 
-    def sample(self, depth, weight, actionSequence, agentActions):
+    def sample(self, depth, weight, transitionSequence, agentActions, violation):
         # basic return condition
         if depth == 0:
-            return self.state.violation * weight, actionSequence
+            if self.state.violation or violation:
+                return weight, transitionSequence
+            else:
+                return 0, transitionSequence
         else:
             depth -= 1
 
         # calculating everything
         probabilities = self.calculate_probabilities_normalized()
         # print(f"probabilities in iteration {iteration}: {probabilities}")
-        selectedAction, proposed_probability = self.select_action(probabilities)
-        actionSequence.append(selectedAction)
+        selectedTransition, proposed_probability = self.select_action(probabilities)
+        transitionSequence.append(selectedTransition)
 
         # update the weight for importance sampling
-        weight *= self.actions[selectedAction] / proposed_probability
+        weight *= self.transitions[selectedTransition] / proposed_probability
+        violation = violation or self.state.violation
 
-        if selectedAction in self.children:
+        if selectedTransition in self.children:
             # set new node
-            outcome, actionSequence = self.children.get(selectedAction).sample(
-                depth, weight, actionSequence, agentActions
+            outcome, transitionSequence = self.children.get(selectedTransition).sample(
+                depth, weight, transitionSequence, agentActions, violation
             )
         else:
             # expand
-            newState = SimulationState.apply_action(self.state, selectedAction)
-            newActions = newState.get_possible_actions_with_probabilities(
-                agentActions[-depth]
-            )
-            newNode = MCTSNode(newState, selectedAction, newActions)
-            self.children[selectedAction] = newNode
+            newState = SimulationState.apply_action(self.state, selectedTransition)
+            newNode = MCTSNode(newState, agentActions[-depth])
+            self.children[selectedTransition] = newNode
             # simulate
-            outcome, actionSequence = newNode.simulateMC(agentActions[-depth:], depth)
+            outcome, mc_transitions = newNode.simulateMC(agentActions[-depth:], depth)
+            transitionSequence.extend(mc_transitions)
             if outcome > 0:
                 outcome = weight
 
@@ -137,13 +144,13 @@ class MCTSNode:
 
         self.updateMaxWeight()
 
-        return outcome, actionSequence
+        return outcome, transitionSequence
 
-    def generate_fix(self):
-        pass
-
-    def get_child(self, action):
-        return self.children.get(action)
+    def get_child(self, state: SimulationState, action):
+        for c in self.children.values():
+            if state.__eq__(c.state) and action == c.action:
+                return c
+        return MCTSNode(state, action)
 
     def select_action(self, probabilities):
         s = 0.0
@@ -158,17 +165,19 @@ class MCTSNode:
 
     def calculate_probabilities_normalized(self):
         values = {}
-        for a in self.actions:
+        for a in self.transitions:
             if a in self.children:
                 childNode = self.children[a]
                 exploit = childNode.value / childNode.visitCount
                 explore = MCTSNode.C * math.sqrt(
                     math.log(self.visitCount) / childNode.visitCount
                 )
-                values[a] = self.actions[a] * (exploit + explore)
+                values[a] = self.transitions[a] * (exploit + explore)
             else:
                 values[a] = (
-                    self.actions[a] * MCTSNode.C * math.sqrt(math.log(self.visitCount))
+                    self.transitions[a]
+                    * MCTSNode.C
+                    * math.sqrt(math.log(self.visitCount))
                 )
 
         total = sum(values.values())
@@ -185,13 +194,13 @@ class MCTSNode:
             result = 0
 
         for i in range(depth):
-            result += 1 if state.violation else 0
             possible_actions = state.get_possible_actions_with_probabilities(
                 agentActions[i]
             )
             a, _ = self.select_action(possible_actions)
             actions.append(a)
             state = SimulationState.apply_action(state, a)
+            result += 1 if state.violation else 0
 
         if result > 0:
             self.value += 1
@@ -201,12 +210,12 @@ class MCTSNode:
         probabilities = self.calculate_probabilities_normalized()
 
         maxWeight = 0
-        for a in self.actions:
+        for a in self.transitions:
             if a in self.children:
                 downstreamWeight = self.children[a].maxWeight
             else:
                 downstreamWeight = 1
-            branchWeight = self.actions[a] / probabilities[a] * downstreamWeight
+            branchWeight = self.transitions[a] / probabilities[a] * downstreamWeight
             maxWeight = max(maxWeight, branchWeight)
 
         self.maxWeight = maxWeight

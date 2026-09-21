@@ -138,7 +138,9 @@ class SimulationState:
     def apply_action(state, action):
         updates = {}
 
+        # move agent
         updates["agent"] = state.agent.copy() + dynamics._action_to_direction[action[0]]
+        # move frogs
         if len(action) > 1:
             updates["frogs"] = state.frogs.copy() + [
                 dynamics._action_to_direction[x] for x in action[1:]
@@ -146,58 +148,52 @@ class SimulationState:
         else:
             updates["frogs"] = state.frogs.copy()
 
-        updates["violation"] = replace(state, **updates).has_violation()
-
         same_pos = (updates["agent"] == updates["frogs"]).all(axis=-1)
-        updates["captured_frogs"] = (
-            same_pos & (state.frog_timer > 0) & np.logical_not(state.dead_frogs)
-        ) | state.captured_frogs
+        active = np.logical_not(state.dead_frogs | state.captured_frogs)
+        # capture frogs
+        frog_capture = same_pos & active & (state.frog_timer > 0)
+        updates["captured_frogs"] = frog_capture | state.captured_frogs
 
-        updates["dead_frogs"] = (
-            same_pos & np.logical_not(updates["captured_frogs"])
-        ) | state.dead_frogs
+        # kill frogs
+        frog_kill = same_pos & active & np.logical_not(frog_capture)
+        updates["dead_frogs"] = frog_kill | state.dead_frogs
 
+        # decrease frog timer
+        updates["frog_timer"] = np.maximum(state.frog_timer - 1, 0)
+
+        # decrease lake timer
+        updates["lake_timer"] = np.maximum(state.lake_timer - 1, 0)
+
+        # empty lakes
         agent_empties = (np.abs(updates["agent"] - state.lakes).sum(axis=1) == 1) & (
-            state.lake_timer == 0
+            updates["lake_timer"] == 0
         )
+
+        # update lake timer
         updates["lake_timer"] = np.where(
-            agent_empties, state.lake_respawn, np.maximum(state.lake_timer - 1, 0)
+            agent_empties, state.lake_respawn, updates["lake_timer"]
         )
+        # update lake full
         updates["lakes_full"] = updates["lake_timer"] == 0
 
         diff_frogs = np.abs(updates["frogs"][:, None, :] - state.lakes[None, :, :])
         near_lake = diff_frogs.max(axis=2) == 1
         near_emptied_lake = near_lake & agent_empties[None, :]
-        frog_near_emptied_lake = near_emptied_lake.any(axis=1)
+        active_frog_near_emptied_lake = near_emptied_lake.any(axis=1) & np.logical_not(
+            updates["captured_frogs"] | updates["dead_frogs"]
+        )
 
         updates["frog_timer"] = np.where(
-            frog_near_emptied_lake, 5, np.maximum(state.frog_timer - 1, 0)
+            active_frog_near_emptied_lake, 5, updates["frog_timer"]
+        )
+
+        updates["violation"] = (
+            frog_kill.any()
+            or active_frog_near_emptied_lake.any()
+            or ((state.frog_timer == 1) & active & np.logical_not(frog_capture)).any()
         )
 
         return replace(state, **updates)
-
-    def has_violation(self):
-        active = np.logical_not(self.dead_frogs | self.captured_frogs)
-        if np.any(np.all(self.agent == self.frogs, axis=1) & active):
-            return True
-
-        if self.ctd:
-            diff_agent = np.abs(self.agent - self.lakes)
-            agent_orthogonal = diff_agent.sum(axis=1) == 1
-
-            if not agent_orthogonal.any():
-                return False
-
-            active_frogs = np.logical_not(self.dead_frogs | self.captured_frogs)
-            diff_frogs = np.abs(self.frogs[:, None, :] - self.lakes[None, :, :])
-            frog_near_lake = (
-                (diff_frogs.max(axis=2) == 1) & active_frogs[:, None]
-            ).any(axis=0)
-
-            combined_per_lake = agent_orthogonal & frog_near_lake & self.lakes_full
-            return combined_per_lake.any()
-
-        return False
 
     def calculate_violation_probability_brute_force(self, agentActions: list):
         violation_probability = 0.0

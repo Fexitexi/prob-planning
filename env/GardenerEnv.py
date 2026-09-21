@@ -39,6 +39,7 @@ class GardenerEnv(gym.Env):
         self._state.grass_active = np.ones(num_grass, dtype=bool)
         self._state.grass_timer = np.zeros(num_grass, dtype=int)
         self._state.score = 0
+        self._step_count = 0
 
         # Define what actions are available (4 directions + 1 do nothing)
         self.action_space = gym.spaces.Discrete(5)
@@ -143,6 +144,7 @@ class GardenerEnv(gym.Env):
         self._dynamics = GardenerDynamics(seed=seed)
 
         self._state.score = 0
+        self._step_count = 0
 
         # Randomly place the agent anywhere on the grid
         self._state.agent = self.np_random.integers(
@@ -460,6 +462,7 @@ class GardenerEnv(gym.Env):
         """
 
         reward = 0
+        self._step_count += 1
 
         grass_patch = self._dynamics.move_agent(self._state, action)
 
@@ -472,11 +475,8 @@ class GardenerEnv(gym.Env):
                 if self._state.agent[0] == c and self._state.agent[1] == r:
                     if self._state.frog_timer[i] > 0:
                         self._state.capt_frogs[i] = True
-                        msg = "FROG CAPTURED!"
                     else:
                         self._state.dead_frogs[i] = True
-                        msg = "FROG KILLED!"
-                    # print(f"\033[31m{msg}\033[0m")
 
         reward = self.update_env(self._state, reward)
 

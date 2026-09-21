@@ -89,6 +89,7 @@ def run(config: Config, seed: int | None = None):
     method = config.method
     sampling_mode = config.sampling.mode
     horizon = config.horizon
+    node = None
 
     while not done:
         start_full_time = time.time()
@@ -115,13 +116,10 @@ def run(config: Config, seed: int | None = None):
 
             case SamplingMode.MCTS:
                 sim_state = SimulationState.from_state(gar._state, config.ctd)
-                node = MCTSNode(
-                    sim_state,
-                    None,
-                    sim_state.get_possible_actions_with_probabilities(
-                        executed_actions[0]
-                    ),
-                )
+                if node:
+                    node = node.get_child(sim_state, executed_actions[0])
+                else:
+                    node = MCTSNode(sim_state, executed_actions[0])
                 new_violations, rot, samples = node.check_MCTS(
                     executed_actions,
                     config.horizon,
@@ -182,6 +180,8 @@ def run(config: Config, seed: int | None = None):
                         else:
                             action = policy_fix.pop(0)
                         break
+                    else:
+                        tested_policies.append(policy_fix)
                 checkCount += 1
                 start_time_check = time.time()
                 match sampling_mode:
@@ -194,14 +194,6 @@ def run(config: Config, seed: int | None = None):
                     case SamplingMode.STRATIFIED:
                         new_violations, rot, samples = check.check(policy_fix)
                     case SamplingMode.MCTS:
-                        sim_state = SimulationState.from_state(gar._state, config.ctd)
-                        node = MCTSNode(
-                            sim_state,
-                            None,
-                            sim_state.get_possible_actions_with_probabilities(
-                                policy_fix[0]
-                            ),
-                        )
                         new_violations, rot, samples = node.check_MCTS(
                             policy_fix,
                             config.horizon,
@@ -448,13 +440,7 @@ if __name__ == "__main__":
                     new_violations, rot, _ = check.check(entry.actions)
                 case SamplingMode.MCTS:
                     sim_state = entry.state
-                    node = MCTSNode(
-                        sim_state,
-                        None,
-                        sim_state.get_possible_actions_with_probabilities(
-                            entry.actions[0]
-                        ),
-                    )
+                    node = MCTSNode(sim_state, entry.actions[0])
                     new_violations, rot, _ = node.check_MCTS(
                         entry.actions,
                         config.horizon,
