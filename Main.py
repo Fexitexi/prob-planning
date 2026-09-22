@@ -1,4 +1,5 @@
 import argparse
+import math
 import random
 import time
 
@@ -27,7 +28,7 @@ def run(config: Config, seed: int | None = None):
 
     # load the pre-trained weights
     q_agent = GardenerQAgent()
-    asp_transformer = ASPTransformer(q_agent, config.sampling)
+    asp_transformer = ASPTransformer(q_agent, config.sampling.mode)
     q_agent.stopLearning()
     q_agent.load_weights("weights.pkl")
 
@@ -44,7 +45,7 @@ def run(config: Config, seed: int | None = None):
     asp_transformer.build_static(state, config.horizon)
     actions = []
     step = 0
-    sampled_trajectories = 0
+    all_samples = 0
     full_times = []
     check_times = []
     fix_times = []
@@ -89,29 +90,36 @@ def run(config: Config, seed: int | None = None):
     sampling_mode = config.sampling.mode
     horizon = config.horizon
     node = None
+    n_rot = math.ceil(
+        math.log(config.sampling.delta) / math.log(1 - config.sampling.epsilon)
+    )
+    n_asp = math.ceil(
+        (1 / (2 * math.pow(config.sampling.epsilon, 2)))
+        * math.log((2 * math.pow(5, horizon)) / config.sampling.delta)
+    )
 
     while not done:
         start_full_time = time.time()
+        sampled_trajectories = 0
         step += 1
         rot_count = 1
         checkCount += 1
-        start_time_check = time.time()
         asp_transformer.reset(config.ctd)
-        asp_transformer.build_dynamic_worlds(state)
+        asp_transformer.build_dynamic_worlds(state, n_asp, horizon)
+        start_time_check = time.time()
         _, executed_actions = gar.simulate_samples(horizon, q_agent, actions)
         match sampling_mode:
             case SamplingMode.RANDOM:
                 new_violations, rot, samples = asp_transformer.call_clingo_check(
-                    state, executed_actions, [], rot_count
+                    state, executed_actions, [], n_rot, rot_count, False
                 )
             case SamplingMode.STRATIFIED:
                 check = SeqentialCheck(
                     gar._state,
                     config.sampling.epsilon,
-                    config.sampling.delta,
                     config.horizon,
                 )
-                new_violations, rot, samples = check.check(executed_actions)
+                new_violations, rot, samples = check.check(executed_actions, n_asp)
 
             case SamplingMode.MCTS:
                 sim_state = SimulationState.from_state(gar._state, config.ctd)
@@ -120,10 +128,7 @@ def run(config: Config, seed: int | None = None):
                 else:
                     node = MCTSNode(sim_state, executed_actions[0])
                 new_violations, rot, samples = node.check_MCTS(
-                    executed_actions,
-                    config.horizon,
-                    config.sampling.epsilon,
-                    config.sampling.max_visits,
+                    executed_actions, config.horizon, config.sampling.epsilon, n_asp
                 )
             case _:
                 raise NotImplementedError(
@@ -154,6 +159,7 @@ def run(config: Config, seed: int | None = None):
             # here we should start the loop
             tested_policies = [executed_actions]
             violations = new_violations
+            acceptPolicy = sampled_trajectories >= n_asp
 
             fixing_count += 1
             while True:
@@ -164,37 +170,41 @@ def run(config: Config, seed: int | None = None):
                 gen_times.append(fix_time_end - fix_time_start)
 
                 gen_count += 1
-                if rot_count != -1:
+                if not acceptPolicy:
                     if policy_fix not in tested_policies:
                         rot_count += 1
                         tested_policies.append(policy_fix)
                     else:
-                        rot_count = -1
+                        acceptPolicy = True
                 else:
-                    if policy_fix in tested_policies:
-                        # cache
-                        actions = policy_fix
-                        action = actions.pop(0)
-                        break
-                    else:
-                        tested_policies.append(policy_fix)
+                    actions = policy_fix
+                    action = actions.pop(0)
+                    break
+
                 checkCount += 1
                 start_time_check = time.time()
                 match sampling_mode:
                     case SamplingMode.RANDOM:
                         new_violations, rot, samples = (
                             asp_transformer.call_clingo_check(
-                                state, policy_fix, violations, rot_count
+                                state,
+                                policy_fix,
+                                violations,
+                                n_rot,
+                                rot_count,
+                                acceptPolicy,
                             )
                         )
                     case SamplingMode.STRATIFIED:
-                        new_violations, rot, samples = check.check(policy_fix)
+                        new_violations, rot, samples = check.check(
+                            policy_fix, n_asp - sampled_trajectories
+                        )
                     case SamplingMode.MCTS:
                         new_violations, rot, samples = node.check_MCTS(
                             policy_fix,
                             config.horizon,
                             config.sampling.epsilon,
-                            config.sampling.max_visits,
+                            n_asp - sampled_trajectories,
                         )
                     case _:
                         raise NotImplementedError(
@@ -228,6 +238,7 @@ def run(config: Config, seed: int | None = None):
         end_time_gen = time.time()
         fix_times.append(end_time_gen - start_time_check)
         best_actions = q_agent.getBestActions(state)
+        all_samples += sampled_trajectories
         if action not in best_actions:
             intervention_count += 1
         rot_counts.append(rot_count)
@@ -261,7 +272,7 @@ def run(config: Config, seed: int | None = None):
         ctd_success,
         ctd_triggered,
         checkCount,
-        sampled_trajectories,
+        all_samples,
         gen_count,
         rejected_count,
     )
@@ -282,7 +293,7 @@ if __name__ == "__main__":
         help="specifies the amount of trajectories within one batch for sampling=1",
     )
     parser.add_argument(
-        "--sampling", type=int, default=2, help="0 - random / 1 - stratified / 2 - MCTS"
+        "--sampling", type=int, default=0, help="0 - random / 1 - stratified / 2 - MCTS"
     )
     parser.add_argument("--horizon", type=int, default=5, help="Horizon")
     parser.add_argument("--rounds", type=int, default=1, help="Number of rounds")
@@ -293,7 +304,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--logLevel",
         type=int,
-        default=1,
+        default=0,
         help="determines the level of statistics printed",
     )
     parser.add_argument(

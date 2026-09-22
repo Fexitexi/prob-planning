@@ -1,3 +1,4 @@
+import math
 import random
 
 import numpy as np
@@ -18,13 +19,13 @@ class SeqentialCheck:
         "wealthRejecting",
     )
 
-    def __init__(self, state, epsilon, confidence, horizon):
+    def __init__(self, state, epsilon, horizon):
         self.state = state
         self.solver: ASPSolver = ASPSolver(True, horizon)
         self.horizon = horizon
         self.epsilon = epsilon
 
-        self.rejectionBoundary = 1 / confidence
+        self.rejectionBoundary = 1 / epsilon
 
         self.wealthAccepting = 1
         self.wealthRejecting = 1
@@ -34,44 +35,53 @@ class SeqentialCheck:
         self.solver.prepare_agent_movement()
         self.solver.prepare_frog_action(self.state)
 
-    def check(self, actions):
+    def check(self, actions, maxSamples):
         violations: list = []
         loop = 0
-        rejectingConstant = (2 / self.epsilon) / ((1 / self.epsilon) + 1)
-        acceptingConstant = 2 / self.epsilon
+        lambdaAccepting = 1
+        lambdaRejecting = 1
+        acceptingSumSquared = 1
+        rejectingSumSquared = 1
         self.solver.clear_agent_movement()
         self.solver.instantiate_agent_movement(actions)
-        while loop < 1000:
+        while loop < maxSamples:
             loop += 1
             loopViolations, outcome = self.sample_ASP()
             violations.extend(loopViolations)
 
-            if outcome > 0:
-                acceptingBet = (self.outcomeSum / acceptingConstant) / self.epsilon
-                rejectingBet = (self.outcomeSum / rejectingConstant) / self.epsilon
-            else:
-                acceptingBet = (1 - (self.outcomeSum / acceptingConstant)) / (
-                    1 - self.epsilon
-                )
-                rejectingBet = (1 - (self.outcomeSum / rejectingConstant)) / (
-                    1 - self.epsilon
-                )
+            difference = outcome - self.epsilon
+            acceptingReward = 1 - (lambdaAccepting * difference)
+            rejectingReward = 1 + (lambdaRejecting * difference)
 
-            self.wealthAccepting *= acceptingBet
-            self.wealthRejecting *= rejectingBet
-
-            self.outcomeSum += outcome
-            acceptingConstant += 1
-            rejectingConstant += 1
+            self.wealthAccepting *= acceptingReward
+            self.wealthRejecting *= rejectingReward
 
             if self.wealthRejecting >= self.rejectionBoundary:
-                # print(f"rejected at {loop}")
                 self.reset()
                 return violations, False, loop
             if self.wealthAccepting >= self.rejectionBoundary:
-                # print(f"accepted at {loop}")
                 self.reset()
                 return violations, True, loop
+
+            # calculate lambdas for next iteration via ONS from Waudby-Smith
+            acceptingSumSquared += acceptingReward**2
+            rejectingSumSquared += rejectingReward**2
+
+            lambdaAccepting -= (2 * difference / acceptingReward) / (
+                (2 - math.log(3)) * acceptingSumSquared
+            )
+            lambdaRejecting -= (2 * difference / rejectingReward) / (
+                (2 - math.log(3)) * rejectingSumSquared
+            )
+
+            lambdaAccepting = max(
+                min(lambdaAccepting, 0.99 / (1 - self.epsilon)),
+                -1 / (1 - self.epsilon),
+            )
+            lambdaRejecting = min(
+                max(lambdaRejecting, -0.99 / (1 - self.epsilon)),
+                1 / self.epsilon,
+            )
 
         self.reset()
         return violations, False, loop
