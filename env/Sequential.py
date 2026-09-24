@@ -1,8 +1,3 @@
-import math
-import random
-
-import numpy as np
-
 from env.ASPSolver import ASPSolver
 from env.simulation_state import SimulationState
 
@@ -11,7 +6,6 @@ class SeqentialCheck:
     __slots__ = (
         "epsilon",
         "horizon",
-        "outcomeSum",
         "rejectionBoundary",
         "solver",
         "state",
@@ -29,7 +23,6 @@ class SeqentialCheck:
 
         self.wealthAccepting = 1
         self.wealthRejecting = 1
-        self.outcomeSum = 1
         self.solver.instantiate_level(self.state)
         self.solver.instantiate_state(self.state)
         self.solver.prepare_agent_movement()
@@ -38,10 +31,11 @@ class SeqentialCheck:
     def check(self, actions, maxSamples):
         violations: list = []
         loop = 0
-        lambdaAccepting = 1
-        lambdaRejecting = 1
-        acceptingSumSquared = 1
-        rejectingSumSquared = 1
+        empMean = 0.0
+        empSum2 = 0.0
+        aGRAPAlambda = 0.0
+        lambdaAccepting = 0.0
+        lambdaRejecting = 0.0
         self.solver.clear_agent_movement()
         self.solver.instantiate_agent_movement(actions)
         while loop < maxSamples:
@@ -62,26 +56,17 @@ class SeqentialCheck:
             if self.wealthAccepting >= self.rejectionBoundary:
                 self.reset()
                 return violations, True, loop
+            # update mean and variance according to Welfords online algorithm
+            oldmean = empMean
+            empMean += (outcome - empMean) / loop
+            empSum2 += (outcome - oldmean) * (outcome - empMean)
 
-            # calculate lambdas for next iteration via ONS from Waudby-Smith
-            acceptingSumSquared += acceptingReward**2
-            rejectingSumSquared += rejectingReward**2
-
-            lambdaAccepting -= (2 * difference / acceptingReward) / (
-                (2 - math.log(3)) * acceptingSumSquared
-            )
-            lambdaRejecting -= (2 * difference / rejectingReward) / (
-                (2 - math.log(3)) * rejectingSumSquared
+            aGRAPAlambda = (empMean - self.epsilon) / (
+                (empSum2 / loop) + ((empMean - self.epsilon) ** 2)
             )
 
-            lambdaAccepting = max(
-                min(lambdaAccepting, 0.99 / (1 - self.epsilon)),
-                -1 / (1 - self.epsilon),
-            )
-            lambdaRejecting = min(
-                max(lambdaRejecting, -0.99 / (1 - self.epsilon)),
-                1 / self.epsilon,
-            )
+            lambdaAccepting = max(0, min(-aGRAPAlambda, 0.75 / (1 - self.epsilon)))
+            lambdaRejecting = max(0, min(aGRAPAlambda, 0.75 / self.epsilon))
 
         self.reset()
         return violations, False, loop
@@ -89,7 +74,6 @@ class SeqentialCheck:
     def reset(self):
         self.wealthAccepting = 1
         self.wealthRejecting = 1
-        self.outcomeSum = 1
 
     def sample_ASP(self):
         self.solver.clear_frog_movement()

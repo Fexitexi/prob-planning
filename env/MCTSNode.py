@@ -29,18 +29,14 @@ class MCTSNode:
 
     def check_MCTS(self, agentActions, depth, epsilon, maxVisit):
         violations = []
-        lambdaAccepting = max(
-            min(1, 0.99 / (self.maxWeight - epsilon)),
-            -1 / (1 - epsilon),
-        )
-        lambdaRejecting = min(
-            max(1, -0.99 / (self.maxWeight - epsilon)),
-            1 / epsilon,
-        )
+        outcomeSum = 0
+        outcomeCOunter = 0
+        onsLambda = 0.0
+        lambdaAccepting = 0.0
+        lambdaRejecting = 0.0
         wealthAccepting = 1
         wealthRejecting = 1
-        acceptingSumSquared = 1
-        rejectingSumSquared = 1
+        sumSquared = 1
         loop = 0
         while loop < maxVisit:
             outcome, transitionSequence = self.sample(depth, 1, [], agentActions, False)
@@ -48,20 +44,33 @@ class MCTSNode:
                 print(f"ERROR: depth: {depth}, length:{len(transitionSequence)}")
 
             if outcome > 0:
+                outcomeCOunter += 1
+                outcomeSum += outcome
                 violations.append(transitionSequence)
 
             # update martingales
             difference = outcome - epsilon
-            acceptingReward = 1 - (lambdaAccepting * difference)
-            rejectingReward = 1 + (lambdaRejecting * difference)
+            z = difference / (1 - (difference * onsLambda))
+
+            acceptingReward = 1 - (
+                lambdaAccepting * difference
+            )  # makes money if outcome == 0
+            rejectingReward = 1 + (
+                lambdaRejecting * difference
+            )  # makes money if outcome  == 1
             if acceptingReward <= 0:
                 print(
-                    f"ERROR {loop}: acceptingReward:{acceptingReward}, lambdaAccepting:{lambdaAccepting}, outcome:{difference}, highestPossibleOutcome:{self.maxWeight}"
+                    f"ERROR {loop}: acceptingReward:{acceptingReward}, lambdaAccepting:{lambdaAccepting}, outcome:{outcome}, highestPossibleOutcome:{self.maxWeight}"
                 )
             if rejectingReward <= 0:
                 print(
                     f"ERROR rejectingReward:{rejectingReward}, lambdaRejecting:{lambdaRejecting}, outcome:{outcome}, highestPossibleOutcome:{self.maxWeight}"
                 )
+            if acceptingReward > 1 and rejectingReward > 1:
+                print(
+                    f"outcome:{outcome}, lambdaRejecting:{lambdaRejecting}, lambdaAccepting:{lambdaAccepting}"
+                )
+
             wealthAccepting *= acceptingReward
             wealthRejecting *= rejectingReward
 
@@ -73,28 +82,30 @@ class MCTSNode:
                 return violations, True, loop
 
             # calculate lambdas for next iteration via ONS from Waudby-Smith
-            acceptingSumSquared += acceptingReward**2
-            rejectingSumSquared += rejectingReward**2
+            sumSquared += z**2
 
-            lambdaAccepting -= (2 * difference / acceptingReward) / (
-                (2 - math.log(3)) * acceptingSumSquared
-            )
-            lambdaRejecting -= (2 * difference / rejectingReward) / (
-                (2 - math.log(3)) * rejectingSumSquared
-            )
+            # if onsLambda is large we expect a 0 outcome
+            # if onsLambda is negative we expect a 1 outcome
+            onsLambda -= (2 * z) / ((2 - math.log(3)) * sumSquared)
 
             lambdaAccepting = max(
-                min(lambdaAccepting, 0.99 / (self.maxWeight - epsilon)),
-                -1 / (1 - epsilon),
-            )
-            lambdaRejecting = min(
-                max(lambdaRejecting, -0.99 / (self.maxWeight - epsilon)),
-                1 / epsilon,
-            )
+                0, min(onsLambda, 0.75 / (self.maxWeight - epsilon))
+            )  # makes money if outcome < m, so large lambda if onsLambda is positive
 
+            lambdaRejecting = max(
+                0, min(-onsLambda, 0.75 / epsilon)
+            )  # makes money if outcome > m, so large lambda if onsLambda is negative
             loop += 1
 
+        if loop == 0:
+            return [], False, 0
         # print(f"indifferent after {loop} iterations")
+        # print(
+        #     f"onsLambda:{onsLambda}, lambdaAccepting:{lambdaAccepting}, maxWeight:{self.maxWeight}"
+        # )
+        # print(
+        #    f"empirical mean:{outcomeSum / loop}, number of nonzero outcomes:{outcomeCOunter}"
+        # )
         # print(f"wealthAccepting:{wealthAccepting}, wealthRejecting:{wealthRejecting}")
         return violations, False, maxVisit
 

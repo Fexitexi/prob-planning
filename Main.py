@@ -106,8 +106,8 @@ def run(config: Config, seed: int | None = None):
         checkCount += 1
         asp_transformer.reset(config.ctd)
         asp_transformer.build_dynamic_worlds(state, n_asp, horizon)
+        _, executed_actions = gar.simulate_samples(horizon, q_agent, [])
         start_time_check = time.time()
-        _, executed_actions = gar.simulate_samples(horizon, q_agent, actions)
         match sampling_mode:
             case SamplingMode.RANDOM:
                 new_violations, rot, samples = asp_transformer.call_clingo_check(
@@ -123,10 +123,10 @@ def run(config: Config, seed: int | None = None):
 
             case SamplingMode.MCTS:
                 sim_state = SimulationState.from_state(gar._state, config.ctd)
-                if node:
-                    node = node.get_child(sim_state, executed_actions[0])
-                else:
-                    node = MCTSNode(sim_state, executed_actions[0])
+                # if node:
+                #    node = node.get_child(sim_state, executed_actions[0])
+                # else:
+                node = MCTSNode(sim_state, executed_actions[0])
                 new_violations, rot, samples = node.check_MCTS(
                     executed_actions, config.horizon, config.sampling.epsilon, n_asp
                 )
@@ -149,10 +149,10 @@ def run(config: Config, seed: int | None = None):
 
         if rot:
             # rule of three is fulfilled, execute RL policy
-            if len(actions) > 0:
-                action = actions.pop(0)
-            else:
-                action = executed_actions[0]
+            # if len(actions) > 0:
+            #    action = actions.pop(0)
+            # else:
+            action = executed_actions[0]
         else:
             # rule of three is not fulfilled, create emergency fix
 
@@ -177,8 +177,10 @@ def run(config: Config, seed: int | None = None):
                     else:
                         acceptPolicy = True
                 else:
-                    actions = policy_fix
-                    action = actions.pop(0)
+                    end_time_gen = time.time()
+                    fix_times.append(end_time_gen - fix_time_start)
+                    # actions = policy_fix
+                    action = policy_fix.pop(0)
                     break
 
                 checkCount += 1
@@ -200,6 +202,7 @@ def run(config: Config, seed: int | None = None):
                             policy_fix, n_asp - sampled_trajectories
                         )
                     case SamplingMode.MCTS:
+                        node = MCTSNode(sim_state, policy_fix[0])
                         new_violations, rot, samples = node.check_MCTS(
                             policy_fix,
                             config.horizon,
@@ -229,14 +232,14 @@ def run(config: Config, seed: int | None = None):
                     # cache
                     actions = policy_fix
                     action = actions.pop(0)
+                    end_time_gen = time.time()
+                    fix_times.append(end_time_gen - fix_time_start)
                     break
                 else:
                     rejected_count += 1
                     for v in new_violations:
                         if v not in violations:
                             violations.append(v)
-        end_time_gen = time.time()
-        fix_times.append(end_time_gen - start_time_check)
         best_actions = q_agent.getBestActions(state)
         all_samples += sampled_trajectories
         if action not in best_actions:
@@ -320,7 +323,7 @@ if __name__ == "__main__":
         "--delta",
         type=float,
         default=0.05,
-        help="confidence delta (0.05 = 95% confidence)",
+        help="confidence delta (0.05 = 95%% confidence)",
     )
     args = parser.parse_args()
 
@@ -481,6 +484,13 @@ if __name__ == "__main__":
                 f"Average solution generation time: {
                     avg_gen:.4f}, Max solution generation time: {max_gen:.4f}"
             )
+        if all_fix_times:
+            avg_fix = sum(all_fix_times) / len(all_fix_times)
+            max_fix = max(all_fix_times)
+            print(
+                f"Average policy fix time: {avg_fix:.4f}, Max policy fix time: {
+                    max_fix:.4f}"
+            )
         if all_full_times:
             avg_full = sum(all_full_times) / len(all_full_times)
             max_full = max(all_full_times)
@@ -499,6 +509,7 @@ if __name__ == "__main__":
                 (all_samples / all_check_counts) / config.rounds:.2f}, {
                 sum(all_check_times) / len(all_check_times):.4f}, {
                 sum(all_gen_times) / len(all_gen_times):.4f}, {
+                sum(all_fix_times) / len(all_fix_times):.4f},{
                 sum(all_full_times) / len(all_full_times):.4f}, {
                 all_frogs_killed / config.rounds:.2f}, {
                 all_ctd_triggered / config.rounds:.2f}, {
