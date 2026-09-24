@@ -2,7 +2,6 @@ import random
 
 import clingo
 import numpy as np
-from clingo.symbol import Symbol
 
 from env.simulation_state import SimulationState
 from env.state import GardenerState
@@ -16,15 +15,8 @@ class ASPSolver:
         self.agent_symbols = {}
         self.frog_movement = []
         self.f_rnd_symbols = {}
-        # create instance
         self._check = clingo.Control()
-        # add external files
         self._check.load("mss_check.lp")
-        # if ctd:
-        # self._check.load("norms-ctd.lp")
-        # else:
-        #    self._check.load("norms.lp")
-        # self._generate = clingo.Control()
 
     def instantiate_level(self, state: GardenerState):
         lines = []
@@ -32,7 +24,6 @@ class ASPSolver:
         # constants
         lines.append(f"#const size={state.size}.")
         lines.append(f"#const horizon={self.horizon}.")
-        # lines.append(f"#const grass_respawn={state.grass_respawn}.")
         lines.append(f"#const lake_respawn={state.lake_respawn}.")
         lines.append("")
 
@@ -46,15 +37,9 @@ class ASPSolver:
         for i, (c, r) in enumerate(state.lakes):
             line += f"lake({c}, {r}, {i})."
         lines.append(line)
-        # constant atoms: grass
-        line = ""
-        # for i, (c, r) in enumerate(state.grass):
-        #    line += f"grass({c}, {r}, {i})."
-        # lines.append(line)
 
         self._check.add("base", [], "\n".join(lines))
         self._check.ground([("base", [])], context=self)
-        # self._generate.add("base", [], lines)
 
     def instantiate_state(self, state: GardenerState):
         lines = []
@@ -71,7 +56,7 @@ class ASPSolver:
         for f, (c, r) in enumerate(state.frogs):
             if state.capt_frogs[f] or state.dead_frogs[f]:
                 continue
-            lines.append(f"frog({c}, {r}, {f}, 0, 0).")
+            lines.append(f"frog({c}, {r}, {f}, 0).")
 
         # adding frog_timer
         for f in range(len(state.frog_timer)):
@@ -170,12 +155,11 @@ class ASPSolver:
                                 clingo.Number(j),
                                 clingo.Number(f),
                                 clingo.Number(t),
-                                clingo.Number(0),
                             ],
                         )
                         atom_id = backend.add_atom(sym)
                         backend.add_external(atom_id, clingo.TruthValue.False_)
-                        self.f_rnd_symbols[(f, t, 0, j)] = sym
+                        self.f_rnd_symbols[(f, t, j)] = sym
 
         self._check.ground([("frog_movement", [])], context=self)
 
@@ -196,47 +180,13 @@ class ASPSolver:
                     idx = int((r - 70) / (30.0 / len(other)))
                     action = other[idx]
 
-                sym = self.f_rnd_symbols[(i, t, 0, action)]
+                sym = self.f_rnd_symbols[(i, t, action)]
                 self._check.assign_external(sym, True)
-                self.frog_movement.append(sym)
-
-    def prepare_frog_movement(self, state):
-        with self._check.backend() as backend:
-            for f in range(len(state.frogs)):
-                if state.dead_frogs[f] or state.capt_frogs[f]:
-                    continue
-                for t in range(self.horizon):
-                    for j in range(100):
-                        sym = clingo.Function(
-                            "f_rnd",
-                            [
-                                clingo.Number(f),
-                                clingo.Number(t),
-                                clingo.Number(0),
-                                clingo.Number(j),
-                            ],
-                        )
-
-                        atom_id = backend.add_atom(sym)
-                        backend.add_external(atom_id, clingo.TruthValue.False_)
-                        self.f_rnd_symbols[(f, t, 0, j)] = sym
-
-        self._check.ground([("frog_movement", [])], context=self)
-
-    def instantiate_frog_movement(self, state):
-        for f in range(len(state.frogs)):
-            if state.dead_frogs[f] or state.captured_frogs[f]:
-                continue
-            for t in range(self.horizon):
-                ran = random.random()
-                r = int(ran * 100)
-                sym: Symbol = self.f_rnd_symbols[(f, t, 0, r)]
-                self._check.assign_external(sym, True)
-                self.frog_movement.append(sym)
+                self.frog_movement.append((i, t, action, sym))
 
     def clear_frog_movement(self):
         for i in self.frog_movement:
-            self._check.assign_external(i, False)
+            self._check.assign_external(i[3], False)
 
         self.frog_movement = []
 
@@ -244,21 +194,13 @@ class ASPSolver:
         self._latest_model = None
         self._check.solve(on_model=self.on_model)
         # print(self._latest_model)
-        violations = []
-        lines = []
         for sym in self._latest_model:
-            if sym.name == "norm_violation" and len(sym.arguments) == 1:
-                world = sym.arguments[0].number
-                violations.append(world)
+            if sym.name == "norm_violation" and len(sym.arguments) == 0:
+                return self.frog_movement, 1
+            else:
+                print(f"Wrong symbol:{sym}")
 
-        for sym in self.frog_movement:
-            if sym.arguments[3].number in violations:
-                lines.append(sym)
-
-        return lines, len(violations)
-
-    def generate(self):
-        pass
+        return [], 0
 
     def on_model(self, m):
         self._latest_model = m.symbols(shown=True)

@@ -106,7 +106,7 @@ def run(config: Config, seed: int | None = None):
         checkCount += 1
         asp_transformer.reset(config.ctd)
         asp_transformer.build_dynamic_worlds(state, n_asp, horizon)
-        _, executed_actions = gar.simulate_samples(horizon, q_agent, [])
+        _, executed_actions = gar.simulate_samples(horizon, q_agent, actions)
         start_time_check = time.time()
         match sampling_mode:
             case SamplingMode.RANDOM:
@@ -149,10 +149,10 @@ def run(config: Config, seed: int | None = None):
 
         if rot:
             # rule of three is fulfilled, execute RL policy
-            # if len(actions) > 0:
-            #    action = actions.pop(0)
-            # else:
-            action = executed_actions[0]
+            if len(actions) > 0:
+                action = actions.pop(0)
+            else:
+                action = executed_actions[0]
         else:
             # rule of three is not fulfilled, create emergency fix
 
@@ -179,7 +179,7 @@ def run(config: Config, seed: int | None = None):
                 else:
                     end_time_gen = time.time()
                     fix_times.append(end_time_gen - fix_time_start)
-                    # actions = policy_fix
+                    actions = policy_fix
                     action = policy_fix.pop(0)
                     break
 

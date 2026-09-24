@@ -337,15 +337,15 @@ class ASPTransformer:
                         for f, action in enumerate(b[1:]):
                             lines.append(f"f_action({action}, {f}, {t}, {i}).")
             elif self._mode == SamplingMode.STRATIFIED:
-                with self._generate.backend() as backend:
-                    for sym in violations:
-                        for f, (c, r) in enumerate(state.frogs):
-                            if f not in self._frogs:
-                                continue
-                            lines.append(f"frog({c}, {r}, {f}, 0, {sym.arguments[3]}).")
+                for i, sym in enumerate(violations):
+                    # print(sym)
+                    for f, (c, r) in enumerate(state.frogs):
+                        if f not in self._frogs:
+                            continue
+                        lines.append(f"frog({c}, {r}, {f}, 0, {i}).")
+                    lines.append(f"f_action({sym[2]}, {sym[0]}, {sym[1]}, {i}).")
+                    # f_action(A,I,T,W)
 
-                        atom_id = backend.add_atom(sym)
-                        backend.add_external(atom_id, clingo.TruthValue.True_)
             else:
                 for i in violations:
                     for f, (c, r) in enumerate(state.frogs):
