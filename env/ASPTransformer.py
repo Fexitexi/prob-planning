@@ -1,9 +1,9 @@
-from config import SamplingMode
 import random
 
 import clingo
 import numpy as np
 
+from config import SamplingMode
 from env.dynamics import GardenerDynamics
 
 
@@ -336,15 +336,14 @@ class ASPTransformer:
                     for t, b in enumerate(a):
                         for f, action in enumerate(b[1:]):
                             lines.append(f"f_action({action}, {f}, {t}, {i}).")
-            elif self._mode == SamplingMode.STRATIFIED:
-                for i, sym in enumerate(violations):
-                    # print(sym)
+            elif self._mode == SamplingMode.SEQUENTIAL:
+                for i, steps in enumerate(violations):
                     for f, (c, r) in enumerate(state.frogs):
                         if f not in self._frogs:
                             continue
                         lines.append(f"frog({c}, {r}, {f}, 0, {i}).")
-                    lines.append(f"f_action({sym[2]}, {sym[0]}, {sym[1]}, {i}).")
-                    # f_action(A,I,T,W)
+                    for sym in steps:
+                        lines.append(f"f_action({sym[2]}, {sym[0]}, {sym[1]}, {i}).")
 
             else:
                 for i in violations:

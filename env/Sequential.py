@@ -41,7 +41,8 @@ class SeqentialCheck:
         while loop < maxSamples:
             loop += 1
             loopViolations, outcome = self.sample_ASP()
-            violations.extend(loopViolations)
+            if outcome == 1:
+                violations.append(loopViolations)
 
             difference = outcome - self.epsilon
             acceptingReward = 1 - (lambdaAccepting * difference)

@@ -31,6 +31,9 @@ class MCTSNode:
         violations = []
         outcomeSum = 0
         outcomeCOunter = 0
+        empMean = 0.0
+        empSum2 = 0.0
+        aGRAPAlambda = 0.0
         onsLambda = 0.0
         lambdaAccepting = 0.0
         lambdaRejecting = 0.0
@@ -39,6 +42,7 @@ class MCTSNode:
         sumSquared = 1
         loop = 0
         while loop < maxVisit:
+            loop += 1
             outcome, transitionSequence = self.sample(depth, 1, [], agentActions, False)
             if len(transitionSequence) != depth:
                 print(f"ERROR: depth: {depth}, length:{len(transitionSequence)}")
@@ -50,7 +54,7 @@ class MCTSNode:
 
             # update martingales
             difference = outcome - epsilon
-            z = difference / (1 - (difference * onsLambda))
+            # z = difference / (1 - (difference * onsLambda))
 
             acceptingReward = 1 - (
                 lambdaAccepting * difference
@@ -82,20 +86,36 @@ class MCTSNode:
                 return violations, True, loop
 
             # calculate lambdas for next iteration via ONS from Waudby-Smith
-            sumSquared += z**2
+            # sumSquared += z**2
 
             # if onsLambda is large we expect a 0 outcome
             # if onsLambda is negative we expect a 1 outcome
-            onsLambda -= (2 * z) / ((2 - math.log(3)) * sumSquared)
+            # onsLambda -= (2 * z) / ((2 - math.log(3)) * sumSquared)
+
+            # update mean and variance according to Welfords online algorithm
+            oldmean = empMean
+            empMean += (outcome - empMean) / loop
+            empSum2 += (outcome - oldmean) * (outcome - empMean)
+
+            aGRAPAlambda = (empMean - epsilon) / (
+                (empSum2 / loop) + ((empMean - epsilon) ** 2)
+            )
 
             lambdaAccepting = max(
-                0, min(onsLambda, 0.75 / (self.maxWeight - epsilon))
-            )  # makes money if outcome < m, so large lambda if onsLambda is positive
+                0, min(-aGRAPAlambda, 0.75 / (self.maxWeight - epsilon))
+            )
+            lambdaRejecting = max(0, min(aGRAPAlambda, 0.75 / epsilon))
+            # lambdaAccepting = max(
+            #    0, min(onsLambda, 0.75 / (self.maxWeight - epsilon))
+            # )  # makes money if outcome < m, so large lambda if onsLambda is positive
 
-            lambdaRejecting = max(
-                0, min(-onsLambda, 0.75 / epsilon)
-            )  # makes money if outcome > m, so large lambda if onsLambda is negative
-            loop += 1
+            # lambdaRejecting = max(
+            #    0, min(-onsLambda, 0.75 / epsilon)
+            # )  # makes money if outcome > m, so large lambda if onsLambda is negative
+
+            # onsLambda = max(
+            #    min(onsLambda, 0.75 / (self.maxWeight - epsilon)), -0.75 / epsilon
+            # )
 
         if loop == 0:
             return [], False, 0

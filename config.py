@@ -9,7 +9,7 @@ class SamplingMode(IntEnum):
     """World-sampling strategy used by the new ASP-based planner."""
 
     RANDOM = 0
-    STRATIFIED = 1
+    SEQUENTIAL = 1
     MCTS = 2
 
 
@@ -76,7 +76,6 @@ class Config:
                 mode=SamplingMode(args.sampling),
                 epsilon=args.epsilon,
                 delta=args.delta,
-                strata=args.strata,
                 indifference=args.indifference,
             ),
             horizon=args.horizon,

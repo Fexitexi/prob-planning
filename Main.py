@@ -1,3 +1,5 @@
+from env.Statistics import StatisticsCounter
+import env.Statistics
 import argparse
 import math
 import random
@@ -21,7 +23,7 @@ gym.envs.registration.register(
 )
 
 
-def run(config: Config, seed: int | None = None):
+def run(config: Config, statsCounter: StatisticsCounter, seed: int | None = None):
     global env
     env = gym.make("GardenerEnv-v0", size=config.size)
     gar: GardenerEnv = env.unwrapped
@@ -45,19 +47,15 @@ def run(config: Config, seed: int | None = None):
     asp_transformer.build_static(state, config.horizon)
     actions = []
     step = 0
-    all_samples = 0
-    full_times = []
-    check_times = []
-    fix_times = []
-    gen_times = []
-    gen_count = 0
-    fixing_count = 0
-    frogs_killed = 0
-    rot_counts = []
-    checkCount = 0
     gen_count = 0
     rejected_count = 0
-    intervention_count = 0
+    samples_arr = []
+    check_times = []
+    gen_times = []
+    full_times = []
+    mtn_1 = 0
+    mtn_2 = 0
+    ctd = 0
 
     if config.logLevel > 2:
         lib = StateLibrary(
@@ -99,11 +97,13 @@ def run(config: Config, seed: int | None = None):
     )
 
     while not done:
-        start_full_time = time.time()
+        check_time = 0
+        gen_time = 0
         sampled_trajectories = 0
+
+        start_full_time = time.time()
         step += 1
         rot_count = 1
-        checkCount += 1
         asp_transformer.reset(config.ctd)
         asp_transformer.build_dynamic_worlds(state, n_asp, horizon)
         _, executed_actions = gar.simulate_samples(horizon, q_agent, actions)
@@ -113,7 +113,7 @@ def run(config: Config, seed: int | None = None):
                 new_violations, rot, samples = asp_transformer.call_clingo_check(
                     state, executed_actions, [], n_rot, rot_count, False
                 )
-            case SamplingMode.STRATIFIED:
+            case SamplingMode.SEQUENTIAL:
                 check = SeqentialCheck(
                     gar._state,
                     config.sampling.epsilon,
@@ -135,7 +135,7 @@ def run(config: Config, seed: int | None = None):
                     f"Sampling mode {sampling_mode!r} is not wired in Main.py"
                 )
         end_time_check = time.time()
-        check_times.append(end_time_check - start_time_check)
+        check_time += end_time_check - start_time_check
         sampled_trajectories += samples
 
         if config.logLevel > 2:
@@ -149,7 +149,7 @@ def run(config: Config, seed: int | None = None):
 
         if rot:
             # rule of three is fulfilled, execute RL policy
-            if len(actions) > 0:
+            if len(actions) > 0 and config.sampling.mode == SamplingMode.RANDOM:
                 action = actions.pop(0)
             else:
                 action = executed_actions[0]
@@ -161,15 +161,14 @@ def run(config: Config, seed: int | None = None):
             violations = new_violations
             acceptPolicy = sampled_trajectories >= n_asp
 
-            fixing_count += 1
             while True:
+                acceptPolicy = sampled_trajectories >= n_asp or acceptPolicy
                 gen_count += 1
-                fix_time_start = time.time()
+                fix_gen_start = time.time()
                 policy_fix = asp_transformer.call_clingo_generate(state, violations)
-                fix_time_end = time.time()
-                gen_times.append(fix_time_end - fix_time_start)
+                fix_gen_end = time.time()
+                gen_time += fix_gen_end - fix_gen_start
 
-                gen_count += 1
                 if not acceptPolicy:
                     if policy_fix not in tested_policies:
                         rot_count += 1
@@ -177,13 +176,14 @@ def run(config: Config, seed: int | None = None):
                     else:
                         acceptPolicy = True
                 else:
-                    end_time_gen = time.time()
-                    fix_times.append(end_time_gen - fix_time_start)
-                    actions = policy_fix
-                    action = policy_fix.pop(0)
+                    print(f"policy accepted due to full sampling: {policy_fix}")
+                    if config.sampling.mode == SamplingMode.RANDOM:
+                        actions = policy_fix
+                        action = actions.pop(0)
+                    else:
+                        action = policy_fix.pop(0)
                     break
 
-                checkCount += 1
                 start_time_check = time.time()
                 match sampling_mode:
                     case SamplingMode.RANDOM:
@@ -197,7 +197,7 @@ def run(config: Config, seed: int | None = None):
                                 acceptPolicy,
                             )
                         )
-                    case SamplingMode.STRATIFIED:
+                    case SamplingMode.SEQUENTIAL:
                         new_violations, rot, samples = check.check(
                             policy_fix, n_asp - sampled_trajectories
                         )
@@ -214,7 +214,7 @@ def run(config: Config, seed: int | None = None):
                             f"Sampling mode {sampling_mode!r} is not wired in Main.py"
                         )
                 end_time_check = time.time()
-                check_times.append(end_time_check - start_time_check)
+                check_time += end_time_check - start_time_check
                 sampled_trajectories += samples
                 if config.logLevel > 2:
                     # calculate real_probability via brute force
@@ -229,22 +229,20 @@ def run(config: Config, seed: int | None = None):
                     lib.try_save(gar._state, real_probability, executed_actions)
 
                 if rot:
+                    print(f"policy fix accepted: {policy_fix}")
                     # cache
-                    actions = policy_fix
-                    action = actions.pop(0)
-                    end_time_gen = time.time()
-                    fix_times.append(end_time_gen - fix_time_start)
+                    if config.sampling.mode == SamplingMode.RANDOM:
+                        actions = policy_fix
+                        action = actions.pop(0)
+                    else:
+                        action = policy_fix.pop(0)
                     break
                 else:
+                    print(f"policy fix rejected:{policy_fix}")
                     rejected_count += 1
                     for v in new_violations:
                         if v not in violations:
                             violations.append(v)
-        best_actions = q_agent.getBestActions(state)
-        all_samples += sampled_trajectories
-        if action not in best_actions:
-            intervention_count += 1
-        rot_counts.append(rot_count)
 
         obs, reward, terminated, truncated, info = env.step(action)
         state: ObservationState = ObservationState.from_obs(obs)
@@ -257,28 +255,27 @@ def run(config: Config, seed: int | None = None):
         done = terminated or truncated
         end_full_time = time.time()
         full_times.append(end_full_time - start_full_time)
+        check_times.append(check_time)
+        gen_times.append(gen_time)
+        samples_arr.append(sampled_trajectories)
 
-    frogs_killed = state.dead_frogs.sum()
-    ctd_triggered = state.stun_counter
-    ctd_success = state.capt_frogs.sum()
+    mtn_1 = state.dead_frogs.sum()
+    mtn_2 = state.stun_counter
+    ctd = state.stun_counter - state.capt_frogs.sum()
+
+    statsCounter.record_Round(
+        step,
+        rejected_count / gen_count,
+        samples_arr,
+        check_times,
+        gen_times,
+        full_times,
+        mtn_1,
+        mtn_2,
+        ctd,
+    )
 
     env.close()
-    return (
-        step,
-        intervention_count,
-        rot_counts,
-        check_times,
-        fix_times,
-        full_times,
-        gen_times,
-        frogs_killed,
-        ctd_success,
-        ctd_triggered,
-        checkCount,
-        all_samples,
-        gen_count,
-        rejected_count,
-    )
 
 
 if __name__ == "__main__":
@@ -290,13 +287,7 @@ if __name__ == "__main__":
         help="specifies the radius of the indifference interval as percent of epsilon",
     )
     parser.add_argument(
-        "--strata",
-        type=int,
-        default=32,
-        help="specifies the amount of trajectories within one batch for sampling=1",
-    )
-    parser.add_argument(
-        "--sampling", type=int, default=0, help="0 - random / 1 - stratified / 2 - MCTS"
+        "--sampling", type=int, default=0, help="0 - random / 1 - sequential / 2 - MCTS"
     )
     parser.add_argument("--horizon", type=int, default=5, help="Horizon")
     parser.add_argument("--rounds", type=int, default=1, help="Number of rounds")
@@ -332,55 +323,9 @@ if __name__ == "__main__":
     random.seed(config.seed)
     seeds = [random.randint(0, 1000000) for _ in range(config.rounds)]
 
-    all_step = 0
-    all_samples = 0
-    all_intervention_count = 0
-    all_rot_counts = []
-    all_check_times = []
-    all_fix_times = []
-    all_full_times = []
-    all_gen_times = []
-    all_frogs_killed = 0
-    all_ctd_success = 0
-    all_ctd_triggered = 0
-    all_check_counts = 0
-    all_gen_counts = 0
-    all_rejected_counts = 0
+    statsCounter = StatisticsCounter(config.rounds)
     for i in range(config.rounds):
-        (
-            step,
-            intervention_count,
-            rot_counts,
-            check_times,
-            fix_times,
-            full_times,
-            gen_times,
-            frogs_killed,
-            ctd_success,
-            ctd_triggered,
-            checkCount,
-            samples,
-            gen_counts,
-            rejected_counts,
-        ) = run(config, seeds[i])
-        all_step += step
-        all_samples += samples
-        all_intervention_count += intervention_count
-        all_rot_counts.extend(rot_counts)
-        all_check_times.extend(check_times)
-        all_fix_times.extend(fix_times)
-        all_full_times.extend(full_times)
-        all_gen_times.extend(gen_times)
-        all_frogs_killed += frogs_killed
-        all_ctd_success += ctd_success
-        all_ctd_triggered += ctd_triggered
-        all_check_counts += checkCount
-        all_gen_counts += gen_counts
-        all_rejected_counts += rejected_counts
-
-    if all_fix_times:
-        avg_fix = sum(all_fix_times) / len(all_fix_times)
-        max_fix = max(all_fix_times)
+        run(config, statsCounter, seeds[i])
 
     if config.logLevel > 1:
         lib = StateLibrary(
@@ -429,7 +374,7 @@ if __name__ == "__main__":
                     new_violations, rot, _ = asp_transformer.call_clingo_check(
                         entry.state, entry.actions, [], 0, []
                     )
-                case SamplingMode.STRATIFIED:
+                case SamplingMode.SEQUENTIAL:
                     check = SeqentialCheck(
                         entry.state,
                         config.sampling.epsilon,
@@ -461,59 +406,4 @@ if __name__ == "__main__":
         print(f"Average type I error: {typeIerror / len(entries):.4f}")
         print(f"Average type II error: {typeIIerror / len(entries):.4f}")
 
-    if config.logLevel > 0:
-        print()
-        print(f"Average Steps: {all_step / config.rounds}")
-        print(
-            f"Percent of Solutions rejected: {(all_rejected_counts / all_gen_counts) * 100:.2f}\n"
-        )
-        print(
-            f"Average Samples: {(all_samples / all_check_counts) / config.rounds:.2f}"
-        )
-        if all_check_times:
-            avg_check = sum(all_check_times) / len(all_check_times)
-            max_check = max(all_check_times)
-            print(
-                f"Average checking time: {avg_check:.4f}, Max checking time: {
-                    max_check:.4f}"
-            )
-        if all_gen_times:
-            avg_gen = sum(all_gen_times) / len(all_gen_times)
-            max_gen = max(all_gen_times)
-            print(
-                f"Average solution generation time: {
-                    avg_gen:.4f}, Max solution generation time: {max_gen:.4f}"
-            )
-        if all_fix_times:
-            avg_fix = sum(all_fix_times) / len(all_fix_times)
-            max_fix = max(all_fix_times)
-            print(
-                f"Average policy fix time: {avg_fix:.4f}, Max policy fix time: {
-                    max_fix:.4f}"
-            )
-        if all_full_times:
-            avg_full = sum(all_full_times) / len(all_full_times)
-            max_full = max(all_full_times)
-            print(
-                f"Average time to compute step: {
-                    avg_full:.4f}, Max time to compute step: {max_full:.4f}\n"
-            )
-        print(f"MTN1: {all_frogs_killed / config.rounds}")
-        print(f"MTN2: {all_ctd_triggered / config.rounds}")
-        print(f"CTD1: {(all_ctd_triggered - all_ctd_success) / config.rounds}")
-
-    if config.logLevel < 1:
-        print(
-            f"{all_step / config.rounds:.2f}, {
-                (all_rejected_counts / all_gen_counts) * 100:.2f}, {
-                (all_samples / all_check_counts) / config.rounds:.2f}, {
-                sum(all_check_times) / len(all_check_times):.4f}, {
-                sum(all_gen_times) / len(all_gen_times):.4f}, {
-                sum(all_fix_times) / len(all_fix_times):.4f},{
-                sum(all_full_times) / len(all_full_times):.4f}, {
-                all_frogs_killed / config.rounds:.2f}, {
-                all_ctd_triggered / config.rounds:.2f}, {
-                (all_ctd_triggered - all_ctd_success) / config.rounds:.2f}"
-        )
-    # if config.ctd:
-    #    print(f"ctd_success: {all_ctd_success / config.rounds}, ctd_triggered: {all_ctd_triggered / config.rounds}")
+    statsCounter.print_statistics(config.logLevel)
