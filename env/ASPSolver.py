@@ -54,7 +54,8 @@ class ASPSolver:
 
         # adding frogs
         for f, (c, r) in enumerate(state.frogs):
-            if state.capt_frogs[f] or state.dead_frogs[f]:
+            dist = abs(state.agent[0] - c) + abs(state.agent[1] - r)
+            if state.capt_frogs[f] or state.dead_frogs[f] or dist > 2 * self.horizon:
                 continue
             lines.append(f"frog({c}, {r}, {f}, 0).")
 
@@ -144,8 +145,13 @@ class ASPSolver:
 
     def prepare_frog_action(self, state):
         with self._check.backend() as backend:
-            for f in range(len(state.frogs)):
-                if state.dead_frogs[f] or state.capt_frogs[f]:
+            for i, f in enumerate(state.frogs):
+                dist = abs(state.agent[0] - f[0]) + abs(state.agent[1] - f[1])
+                if (
+                    state.dead_frogs[i]
+                    or state.capt_frogs[i]
+                    or dist > 2 * self.horizon
+                ):
                     continue
                 for t in range(self.horizon):
                     for j in range(5):
@@ -153,19 +159,25 @@ class ASPSolver:
                             "f_action",
                             [
                                 clingo.Number(j),
-                                clingo.Number(f),
+                                clingo.Number(i),
                                 clingo.Number(t),
                             ],
                         )
                         atom_id = backend.add_atom(sym)
                         backend.add_external(atom_id, clingo.TruthValue.False_)
-                        self.f_rnd_symbols[(f, t, j)] = sym
+                        self.f_rnd_symbols[(i, t, j)] = sym
 
         self._check.ground([("frog_movement", [])], context=self)
 
     def instantiate_frog_actions(self, state: SimulationState):
+        # TODO: fix this, broken due to only simulating from the first state
         for i, f in enumerate(state.frogs):
-            if state.dead_frogs[i] or state.captured_frogs[i]:
+            dist = abs(state.agent[0] - f[0]) + abs(state.agent[1] - f[1])
+            if (
+                state.dead_frogs[i]
+                or state.captured_frogs[i]
+                or dist > 2 * self.horizon
+            ):
                 continue
             pref, other = state.get_frog_actions(f)
             for t in range(self.horizon):

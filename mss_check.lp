@@ -57,6 +57,7 @@ norm_violation() :- ctd(F,T).
 #defined act_pos/5.
 #defined lake_order/4.
 #defined lake_action/4.
+#defined f_action/3.
 #defined frog_timer/3.
 #defined ctd/2.
 #defined ctd_world/1.

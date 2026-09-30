@@ -229,7 +229,11 @@ class ASPTransformer:
                 if dist <= 2 * horizon:
                     indices = np.where(np.all(state.frogs == [c, r], axis=1))[0]
                     for i in indices:
-                        if i not in self._frogs and not self._state.dead_frogs[i]:
+                        if (
+                            i not in self._frogs
+                            and not self._state.dead_frogs[i]
+                            and not self._state.capt_frogs[i]
+                        ):
                             self._frogs.append(i)
 
         self._rnd = {}

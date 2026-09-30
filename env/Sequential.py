@@ -13,13 +13,13 @@ class SeqentialCheck:
         "wealthRejecting",
     )
 
-    def __init__(self, state, epsilon, horizon):
+    def __init__(self, state, epsilon, delta, horizon):
         self.state = state
         self.solver: ASPSolver = ASPSolver(True, horizon)
         self.horizon = horizon
         self.epsilon = epsilon
 
-        self.rejectionBoundary = 1 / epsilon
+        self.rejectionBoundary = 1 / delta
 
         self.wealthAccepting = 1
         self.wealthRejecting = 1
@@ -28,8 +28,10 @@ class SeqentialCheck:
         self.solver.prepare_agent_movement()
         self.solver.prepare_frog_action(self.state)
 
-    def check(self, actions, maxSamples):
+    def check(self, actions, maxSamples, sampleMax):
         violations: list = []
+        quickAcceptWealth = 1
+        quickWinPossible = True
         loop = 0
         empMean = 0.0
         empSum2 = 0.0
@@ -42,16 +44,21 @@ class SeqentialCheck:
             loop += 1
             loopViolations, outcome = self.sample_ASP()
             if outcome == 1:
+                quickWinPossible = False
                 violations.append(loopViolations)
 
             difference = outcome - self.epsilon
             acceptingReward = 1 - (lambdaAccepting * difference)
             rejectingReward = 1 + (lambdaRejecting * difference)
+            if quickWinPossible:
+                quickAcceptWealth *= 1 - (outcome - self.epsilon)
+                if quickAcceptWealth > self.rejectionBoundary:
+                    return [], True, loop
 
             self.wealthAccepting *= acceptingReward
             self.wealthRejecting *= rejectingReward
 
-            if self.wealthRejecting >= self.rejectionBoundary:
+            if self.wealthRejecting >= self.rejectionBoundary and not sampleMax:
                 self.reset()
                 return violations, False, loop
             if self.wealthAccepting >= self.rejectionBoundary:

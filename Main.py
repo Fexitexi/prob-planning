@@ -1,5 +1,3 @@
-from env.Statistics import StatisticsCounter
-import env.Statistics
 import argparse
 import math
 import random
@@ -15,7 +13,7 @@ from env.MCTSNode import MCTSNode
 from env.Sequential import SeqentialCheck
 from env.simulation_state import SimulationState
 from env.state import ObservationState
-from env.StateLibrary import StateLibrary, custom_edges
+from env.Statistics import StatisticsCounter
 
 gym.envs.registration.register(
     id="GardenerEnv-v0",
@@ -25,7 +23,7 @@ gym.envs.registration.register(
 
 def run(config: Config, statsCounter: StatisticsCounter, seed: int | None = None):
     global env
-    env = gym.make("GardenerEnv-v0", size=config.size)
+    env = gym.make("GardenerEnv-v0", size=config.size, frogs=config.frogs)
     gar: GardenerEnv = env.unwrapped
 
     # load the pre-trained weights
@@ -56,38 +54,13 @@ def run(config: Config, statsCounter: StatisticsCounter, seed: int | None = None
     mtn_1 = 0
     mtn_2 = 0
     ctd = 0
-
-    if config.logLevel > 2:
-        lib = StateLibrary(
-            "sim_states",
-            edges=custom_edges(
-                0,
-                0.005,
-                0.01,
-                0.15,
-                0.02,
-                0.03,
-                0.04,
-                0.05,
-                0.06,
-                0.07,
-                0.08,
-                0.09,
-                0.1,
-                0.2,
-                0.3,
-                0.4,
-                0.5,
-                0.75,
-                1.0,
-            ),
-            max_per_bucket=1000,
-        )
+    checks = 0
+    typeIerror = 0
+    typeIIerror = 0
 
     # cache frequently accessed config values for the hot loop
     sampling_mode = config.sampling.mode
     horizon = config.horizon
-    node = None
     n_rot = math.ceil(
         math.log(config.sampling.delta) / math.log(1 - config.sampling.epsilon)
     )
@@ -117,18 +90,21 @@ def run(config: Config, statsCounter: StatisticsCounter, seed: int | None = None
                 check = SeqentialCheck(
                     gar._state,
                     config.sampling.epsilon,
-                    config.horizon,
+                    config.sampling.delta,
+                    horizon,
                 )
-                new_violations, rot, samples = check.check(executed_actions, n_asp)
+                new_violations, rot, samples = check.check(
+                    executed_actions, n_asp, False
+                )
 
             case SamplingMode.MCTS:
                 sim_state = SimulationState.from_state(gar._state, config.ctd)
-                # if node:
-                #    node = node.get_child(sim_state, executed_actions[0])
-                # else:
-                node = MCTSNode(sim_state, executed_actions[0])
+                node = MCTSNode(sim_state, executed_actions[0], horizon)
                 new_violations, rot, samples = node.check_MCTS(
-                    executed_actions, config.horizon, config.sampling.epsilon, n_asp
+                    executed_actions,
+                    config.sampling.epsilon,
+                    config.sampling.delta,
+                    config.sampling.indifference,
                 )
             case _:
                 raise NotImplementedError(
@@ -143,13 +119,17 @@ def run(config: Config, statsCounter: StatisticsCounter, seed: int | None = None
                 gar._state, config.ctd
             )
             real_probability = sim_state.calculate_violation_probability_brute_force(
-                executed_actions
+                executed_actions, horizon
             )
-            lib.try_save(gar._state, real_probability, executed_actions)
+            checks += 1
+            if rot and real_probability > config.sampling.epsilon:
+                typeIIerror += 1
+            if not rot and real_probability <= config.sampling.epsilon:
+                typeIerror += 1
 
         if rot:
             # rule of three is fulfilled, execute RL policy
-            if len(actions) > 0 and config.sampling.mode == SamplingMode.RANDOM:
+            if len(actions) > 0:
                 action = actions.pop(0)
             else:
                 action = executed_actions[0]
@@ -162,6 +142,7 @@ def run(config: Config, statsCounter: StatisticsCounter, seed: int | None = None
             acceptPolicy = sampled_trajectories >= n_asp
 
             while True:
+                # TODO: this is inaccurate for MCTS
                 acceptPolicy = sampled_trajectories >= n_asp or acceptPolicy
                 gen_count += 1
                 fix_gen_start = time.time()
@@ -176,12 +157,8 @@ def run(config: Config, statsCounter: StatisticsCounter, seed: int | None = None
                     else:
                         acceptPolicy = True
                 else:
-                    print(f"policy accepted due to full sampling: {policy_fix}")
-                    if config.sampling.mode == SamplingMode.RANDOM:
-                        actions = policy_fix
-                        action = actions.pop(0)
-                    else:
-                        action = policy_fix.pop(0)
+                    actions = policy_fix
+                    action = actions.pop(0)
                     break
 
                 start_time_check = time.time()
@@ -199,15 +176,15 @@ def run(config: Config, statsCounter: StatisticsCounter, seed: int | None = None
                         )
                     case SamplingMode.SEQUENTIAL:
                         new_violations, rot, samples = check.check(
-                            policy_fix, n_asp - sampled_trajectories
+                            policy_fix, n_asp - sampled_trajectories, acceptPolicy
                         )
                     case SamplingMode.MCTS:
-                        node = MCTSNode(sim_state, policy_fix[0])
+                        node = MCTSNode(sim_state, policy_fix[0], horizon)
                         new_violations, rot, samples = node.check_MCTS(
                             policy_fix,
-                            config.horizon,
                             config.sampling.epsilon,
-                            n_asp - sampled_trajectories,
+                            config.sampling.delta,
+                            config.sampling.indifference,
                         )
                     case _:
                         raise NotImplementedError(
@@ -217,28 +194,28 @@ def run(config: Config, statsCounter: StatisticsCounter, seed: int | None = None
                 check_time += end_time_check - start_time_check
                 sampled_trajectories += samples
                 if config.logLevel > 2:
+                    checks += 1
                     # calculate real_probability via brute force
                     sim_state: SimulationState = SimulationState.from_state(
                         gar._state, config.ctd
                     )
                     real_probability = (
                         sim_state.calculate_violation_probability_brute_force(
-                            executed_actions
+                            policy_fix, horizon
                         )
                     )
-                    lib.try_save(gar._state, real_probability, executed_actions)
+
+                    if rot and real_probability > config.sampling.epsilon:
+                        typeIIerror += 1
+                    if not rot and real_probability <= config.sampling.epsilon:
+                        typeIerror += 1
 
                 if rot:
-                    print(f"policy fix accepted: {policy_fix}")
                     # cache
-                    if config.sampling.mode == SamplingMode.RANDOM:
-                        actions = policy_fix
-                        action = actions.pop(0)
-                    else:
-                        action = policy_fix.pop(0)
+                    actions = policy_fix
+                    action = actions.pop(0)
                     break
                 else:
-                    print(f"policy fix rejected:{policy_fix}")
                     rejected_count += 1
                     for v in new_violations:
                         if v not in violations:
@@ -263,9 +240,14 @@ def run(config: Config, statsCounter: StatisticsCounter, seed: int | None = None
     mtn_2 = state.stun_counter
     ctd = state.stun_counter - state.capt_frogs.sum()
 
+    if gen_count == 0:
+        rej_percent = 0
+    else:
+        rej_percent = rejected_count / gen_count
+
     statsCounter.record_Round(
         step,
-        rejected_count / gen_count,
+        rej_percent,
         samples_arr,
         check_times,
         gen_times,
@@ -274,6 +256,9 @@ def run(config: Config, statsCounter: StatisticsCounter, seed: int | None = None
         mtn_2,
         ctd,
     )
+    if config.logLevel > 2:
+        print(f"type I: {typeIerror / checks}")
+        print(f"type II: {typeIIerror / checks}")
 
     env.close()
 
@@ -287,7 +272,7 @@ if __name__ == "__main__":
         help="specifies the radius of the indifference interval as percent of epsilon",
     )
     parser.add_argument(
-        "--sampling", type=int, default=0, help="0 - random / 1 - sequential / 2 - MCTS"
+        "--sampling", type=int, default=1, help="0 - random / 1 - sequential / 2 - MCTS"
     )
     parser.add_argument("--horizon", type=int, default=5, help="Horizon")
     parser.add_argument("--rounds", type=int, default=1, help="Number of rounds")
@@ -309,6 +294,9 @@ if __name__ == "__main__":
         help="0 - no render / 1 - render",
     )
     parser.add_argument("--size", type=int, default=15, help="grid size")
+    parser.add_argument(
+        "--frogs", type=float, default=0.01, help="percent of spaces filled with frogs"
+    )
     parser.add_argument("--epsilon", type=float, default=0.05, help="error tolerance")
     parser.add_argument(
         "--delta",
@@ -326,84 +314,5 @@ if __name__ == "__main__":
     statsCounter = StatisticsCounter(config.rounds)
     for i in range(config.rounds):
         run(config, statsCounter, seeds[i])
-
-    if config.logLevel > 1:
-        lib = StateLibrary(
-            "sim_states",
-            edges=custom_edges(
-                0,
-                0.005,
-                0.01,
-                0.15,
-                0.02,
-                0.03,
-                0.04,
-                0.05,
-                0.06,
-                0.07,
-                0.08,
-                0.09,
-                0.1,
-                0.2,
-                0.3,
-                0.4,
-                0.5,
-                0.75,
-                1.0,
-            ),
-            max_per_bucket=1000,
-        )
-        match config.sampling.mode:
-            case SamplingMode.RANDOM:
-                q_agent = GardenerQAgent()
-                asp_transformer = ASPTransformer(q_agent, config.sampling)
-                q_agent.stopLearning()
-                q_agent.load_weights("weights.pkl")
-
-        typeIerror = 0
-        typeIIerror = 0
-
-        entries = lib.load_range(0.0, 1.0)
-
-        for entry in entries:
-            match config.sampling.mode:
-                case SamplingMode.RANDOM:
-                    asp_transformer.build_static(entry.state, config.horizon)
-                    asp_transformer.reset(config.ctd)
-                    asp_transformer.build_dynamic_worlds(entry.state, [])
-                    new_violations, rot, _ = asp_transformer.call_clingo_check(
-                        entry.state, entry.actions, [], 0, []
-                    )
-                case SamplingMode.SEQUENTIAL:
-                    check = SeqentialCheck(
-                        entry.state,
-                        config.sampling.epsilon,
-                        config.sampling.indifference,
-                        config.sampling.confidence,
-                        config.horizon,
-                        [],
-                    )
-                    new_violations, rot, _ = check.check(entry.actions)
-                case SamplingMode.MCTS:
-                    sim_state = entry.state
-                    node = MCTSNode(sim_state, entry.actions[0])
-                    new_violations, rot, _ = node.check_MCTS(
-                        entry.actions,
-                        config.horizon,
-                        config.sampling.epsilon,
-                        config.sampling.max_visits,
-                    )
-                case _:
-                    raise NotImplementedError(
-                        f"Sampling mode {config.sampling.mode!r} is not wired in Main.py"
-                    )
-            if rot and entry.value > config.sampling.epsilon:
-                typeIerror += 1
-            if not rot and entry.value <= config.sampling.epsilon:
-                typeIIerror += 1
-
-        print()
-        print(f"Average type I error: {typeIerror / len(entries):.4f}")
-        print(f"Average type II error: {typeIIerror / len(entries):.4f}")
 
     statsCounter.print_statistics(config.logLevel)

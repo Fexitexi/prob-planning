@@ -9,6 +9,7 @@ class MCTSNode:
     __slots__ = (
         "actions",
         "children",
+        "horizon",
         "maxWeight",
         "state",
         "transitions",
@@ -16,51 +17,55 @@ class MCTSNode:
         "visitCount",
     )
 
-    def __init__(self, state: SimulationState, action):
+    def __init__(self, state: SimulationState, action, horizon):
         self.state: SimulationState = state
         self.actions = [action]  # [agentAction]
         self.children = {}  # {action: MCTSNode}
         self.transitions: dict = state.get_possible_actions_with_probabilities(
-            action
+            action, horizon
         )  # {action: probability}
+        self.horizon = horizon
         self.value = 0
         self.visitCount = 1
         self.maxWeight = 1
 
-    def check_MCTS(self, agentActions, depth, epsilon, maxVisit):
+    def check_MCTS(self, agentActions, epsilon, delta, indifference):
         violations = []
-        outcomeSum = 0
-        outcomeCOunter = 0
+        quickAcceptWealth = 1
+        quickWinPossible = True
         empMean = 0.0
         empSum2 = 0.0
         aGRAPAlambda = 0.0
-        onsLambda = 0.0
         lambdaAccepting = 0.0
         lambdaRejecting = 0.0
         wealthAccepting = 1
         wealthRejecting = 1
-        sumSquared = 1
         loop = 0
-        while loop < maxVisit:
+        while loop < 10000:
             loop += 1
-            outcome, transitionSequence = self.sample(depth, 1, [], agentActions, False)
-            if len(transitionSequence) != depth:
-                print(f"ERROR: depth: {depth}, length:{len(transitionSequence)}")
+            outcome, transitionSequence = self.sample(
+                self.horizon, 1, [], agentActions, False
+            )
+            if len(transitionSequence) != self.horizon:
+                print(f"ERROR: depth: {self.horizon}, length:{len(transitionSequence)}")
 
             if outcome > 0:
-                outcomeCOunter += 1
-                outcomeSum += outcome
                 violations.append(transitionSequence)
+                quickWinPossible = False
 
+            if quickWinPossible:
+                quickAcceptWealth *= 1 - (outcome - epsilon)
+                if quickAcceptWealth > 1 / delta:
+                    return [], True, loop
             # update martingales
-            difference = outcome - epsilon
-            # z = difference / (1 - (difference * onsLambda))
+            acceptingDifference = outcome - epsilon
+            rejectingDifference = outcome - epsilon
 
             acceptingReward = 1 - (
-                lambdaAccepting * difference
+                lambdaAccepting * acceptingDifference
             )  # makes money if outcome == 0
             rejectingReward = 1 + (
-                lambdaRejecting * difference
+                lambdaRejecting * rejectingDifference
             )  # makes money if outcome  == 1
             if acceptingReward <= 0:
                 print(
@@ -78,19 +83,12 @@ class MCTSNode:
             wealthAccepting *= acceptingReward
             wealthRejecting *= rejectingReward
 
-            if wealthRejecting > 1 / epsilon:
-                # print(f"rejected after {loop} iterations")
+            if wealthRejecting > 1 / delta:
+                # print(f"rejected after {loop} iterations, empMean: {empMean}")
                 return violations, False, loop
-            if wealthAccepting > 1 / epsilon:
-                # print(f"accepted after {loop} iterations")
+            if wealthAccepting > 1 / delta:
+                # print(f"accepted after {loop} iterations, empMean: {empMean}")
                 return violations, True, loop
-
-            # calculate lambdas for next iteration via ONS from Waudby-Smith
-            # sumSquared += z**2
-
-            # if onsLambda is large we expect a 0 outcome
-            # if onsLambda is negative we expect a 1 outcome
-            # onsLambda -= (2 * z) / ((2 - math.log(3)) * sumSquared)
 
             # update mean and variance according to Welfords online algorithm
             oldmean = empMean
@@ -105,29 +103,12 @@ class MCTSNode:
                 0, min(-aGRAPAlambda, 0.75 / (self.maxWeight - epsilon))
             )
             lambdaRejecting = max(0, min(aGRAPAlambda, 0.75 / epsilon))
-            # lambdaAccepting = max(
-            #    0, min(onsLambda, 0.75 / (self.maxWeight - epsilon))
-            # )  # makes money if outcome < m, so large lambda if onsLambda is positive
+            if loop % 10000 == 0:
+                print(f"empMean: {empMean}")
 
-            # lambdaRejecting = max(
-            #    0, min(-onsLambda, 0.75 / epsilon)
-            # )  # makes money if outcome > m, so large lambda if onsLambda is negative
-
-            # onsLambda = max(
-            #    min(onsLambda, 0.75 / (self.maxWeight - epsilon)), -0.75 / epsilon
-            # )
-
-        if loop == 0:
-            return [], False, 0
         # print(f"indifferent after {loop} iterations")
-        # print(
-        #     f"onsLambda:{onsLambda}, lambdaAccepting:{lambdaAccepting}, maxWeight:{self.maxWeight}"
-        # )
-        # print(
-        #    f"empirical mean:{outcomeSum / loop}, number of nonzero outcomes:{outcomeCOunter}"
-        # )
         # print(f"wealthAccepting:{wealthAccepting}, wealthRejecting:{wealthRejecting}")
-        return violations, False, maxVisit
+        return violations, False, loop
 
     def sample(self, depth, weight, transitionSequence, agentActions, violation):
         # basic return condition
@@ -141,7 +122,9 @@ class MCTSNode:
 
         if agentActions[0] not in self.actions:
             self.transitions.update(
-                self.state.get_possible_actions_with_probabilities(agentActions[0])
+                self.state.get_possible_actions_with_probabilities(
+                    agentActions[0], self.horizon
+                )
             )
             self.actions.append(agentActions[0])
 
@@ -158,17 +141,17 @@ class MCTSNode:
         if selectedTransition in self.children:
             # set new node
             outcome, transitionSequence = self.children.get(selectedTransition).sample(
-                depth, weight, transitionSequence, agentActions, violation
+                depth, weight, transitionSequence, agentActions[1:], violation
             )
         else:
             # expand
             newState = SimulationState.apply_action(self.state, selectedTransition)
-            newNode = MCTSNode(newState, agentActions[-depth])
+            newNode = MCTSNode(newState, agentActions[0], self.horizon)
             self.children[selectedTransition] = newNode
             # simulate
-            outcome, mc_transitions = newNode.simulateMC(agentActions[-depth:], depth)
+            outcome, mc_transitions = newNode.simulateMC(agentActions[1:], depth)
             transitionSequence.extend(mc_transitions)
-            if outcome > 0:
+            if outcome > 0 or violation:
                 outcome = weight
 
         if outcome > 0:
@@ -183,7 +166,7 @@ class MCTSNode:
         for c in self.children.values():
             if state.__eq__(c.state) and action in c.actions:
                 return c
-        return MCTSNode(state, action)
+        return MCTSNode(state, action, self.horizon)
 
     def select_action(self, probabilities):
         s = 0.0
@@ -221,16 +204,16 @@ class MCTSNode:
         return {action: value / total for action, value in values.items()}
 
     def simulateMC(self, agentActions, depth):
-        actions = []
-        state = self.state
         if self.state.violation:
             result = 1
         else:
             result = 0
 
+        actions = []
+        state = self.state
         for i in range(depth):
             possible_actions = state.get_possible_actions_with_probabilities(
-                agentActions[i]
+                agentActions[i], self.horizon
             )
             a, _ = self.select_action(possible_actions)
             actions.append(a)

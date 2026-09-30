@@ -10,7 +10,13 @@ from env.state import GardenerState
 
 
 class GardenerEnv(gym.Env):
-    def __init__(self, size: int = 15, grass_respawn: int = 50, lake_respawn: int = 20):
+    def __init__(
+        self,
+        size: int = 15,
+        frogs: float = 0.01,
+        grass_respawn: int = 50,
+        lake_respawn: int = 20,
+    ):
         # The size of the square grid (5x5 by default)
 
         # Initialize positions - will be set randomly in reset()
@@ -19,7 +25,7 @@ class GardenerEnv(gym.Env):
         self._state.size = size
         self._state.grass_respawn = grass_respawn
         self._state.lake_respawn = lake_respawn
-        num_frogs = max(1, int(size * size * 0.01))
+        num_frogs = max(1, int(size * size * frogs))
         num_lakes = max(1, int(size * size * 0.02))
         num_grass = max(1, int(size * size * 0.04))
         num_walls = int(size * size * 0.30)
@@ -278,6 +284,7 @@ class GardenerEnv(gym.Env):
 
         from collections import deque
 
+        # TODO: apparently incorrect, makes frogs move uniformly random
         for lx, ly in lake_positions:
             dist = np.full((size, size), np.iinfo(np.int32).max, dtype=np.int32)
             best = np.zeros((size, size, 2), dtype=np.int8)
