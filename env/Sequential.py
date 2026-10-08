@@ -1,3 +1,5 @@
+import random
+
 from env.ASPSolver import ASPSolver
 from env.simulation_state import SimulationState
 
@@ -14,7 +16,7 @@ class SeqentialCheck:
     )
 
     def __init__(self, state, epsilon, delta, horizon):
-        self.state = state
+        self.state: SimulationState = state
         self.solver: ASPSolver = ASPSolver(True, horizon)
         self.horizon = horizon
         self.epsilon = epsilon
@@ -23,10 +25,10 @@ class SeqentialCheck:
 
         self.wealthAccepting = 1
         self.wealthRejecting = 1
-        self.solver.instantiate_level(self.state)
-        self.solver.instantiate_state(self.state)
-        self.solver.prepare_agent_movement()
-        self.solver.prepare_frog_action(self.state)
+        # self.solver.instantiate_level(self.state)
+        # self.solver.instantiate_state(self.state)
+        # self.solver.prepare_agent_movement()
+        # self.solver.prepare_frog_action(self.state)
 
     def check(self, actions, maxSamples, sampleMax):
         violations: list = []
@@ -38,22 +40,22 @@ class SeqentialCheck:
         aGRAPAlambda = 0.0
         lambdaAccepting = 0.0
         lambdaRejecting = 0.0
-        self.solver.clear_agent_movement()
-        self.solver.instantiate_agent_movement(actions)
+        # self.solver.clear_agent_movement()
+        # self.solver.instantiate_agent_movement(actions)
         while loop < maxSamples:
             loop += 1
-            loopViolations, outcome = self.sample_ASP()
+            loopViolations, outcome = self.sample(actions)
             if outcome == 1:
-                quickWinPossible = False
+                #    quickWinPossible = False
                 violations.append(loopViolations)
 
             difference = outcome - self.epsilon
             acceptingReward = 1 - (lambdaAccepting * difference)
             rejectingReward = 1 + (lambdaRejecting * difference)
-            if quickWinPossible:
-                quickAcceptWealth *= 1 - (outcome - self.epsilon)
-                if quickAcceptWealth > self.rejectionBoundary:
-                    return [], True, loop
+            # if quickWinPossible:
+            #    quickAcceptWealth *= 1 - (outcome - self.epsilon)
+            #    if quickAcceptWealth > self.rejectionBoundary:
+            #        return [], True, loop
 
             self.wealthAccepting *= acceptingReward
             self.wealthRejecting *= rejectingReward
@@ -89,12 +91,29 @@ class SeqentialCheck:
         violations, outcome = self.solver.check()
         return violations, outcome
 
+    def sample(self, agentActions):
+        result = self.state.arr[-1]
 
-def select_action(possible_actions, probability):
+        actions = []
+        arr = self.state.arr
+        for i in range(len(agentActions)):
+            possible_actions = self.state.get_possible_actions_with_probabilities(
+                arr, agentActions[i], self.horizon
+            )
+            a = select_action(possible_actions)
+            actions.append(a)
+            arr = self.state.apply_action(arr, a)
+            result += arr[-1]
+
+        return actions, min(1, result)
+
+
+def select_action(possible_actions):
+    rnd = random.random()
     s = 0.0
     for a, p in possible_actions.items():
         s += p
-        if s > probability:
+        if s > rnd:
             return a
     raise ValueError(
         "select_action could not select an action, the sum of probabilities did not add up to one"

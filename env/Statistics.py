@@ -91,3 +91,15 @@ class StatisticsCounter:
                         np.average(self.mtn_2):.4f}\nAverage amount of CTD per Round:{
                         np.average(self.ctd):.4f}"
                 )
+            case _:
+                print(
+                    f"{np.average(self.steps):.4f}, {np.std(self.steps):.4f}, {
+                        np.average(self.rejected_solutions):.4f}, {
+                        np.std(self.rejected_solutions):.4f}, {
+                        np.average(samples):.4f}, {np.std(samples):.4f}, {
+                        np.average(checking_times):.4f}, {np.std(checking_times):.4f}, {
+                        np.average(generation_times):.4f}, {
+                        np.std(generation_times):.4f}, {np.average(total_times):.4f}, {
+                        np.std(total_times):.4f}, {np.average(self.mtn_1):.4f}, {
+                        np.average(self.mtn_2):.4f}, {np.average(self.ctd):.4f}"
+                )

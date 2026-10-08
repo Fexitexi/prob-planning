@@ -2,6 +2,7 @@ import argparse
 import math
 import random
 import time
+import json
 
 import gymnasium as gym
 
@@ -21,7 +22,9 @@ gym.envs.registration.register(
 )
 
 
-def run(config: Config, statsCounter: StatisticsCounter, seed: int | None = None):
+def run(
+    config: Config, statsCounter: StatisticsCounter, round_nr, seed: int | None = None
+):
     global env
     env = gym.make("GardenerEnv-v0", size=config.size, frogs=config.frogs)
     gar: GardenerEnv = env.unwrapped
@@ -68,203 +71,240 @@ def run(config: Config, statsCounter: StatisticsCounter, seed: int | None = None
         (1 / (2 * math.pow(config.sampling.epsilon, 2)))
         * math.log((2 * math.pow(5, horizon)) / config.sampling.delta)
     )
+    with open(
+        f"db/{config.sampling.mode}_{config.size}_{config.sampling.epsilon}_{config.sampling.delta}_{config.sampling.indifference}_{config.frogs}.jsonl",
+        "a",
+    ) as f:
+        while not done:
+            check_time = 0
+            gen_time = 0
+            sampled_trajectories = 0
+            step_gens = 0
 
-    while not done:
-        check_time = 0
-        gen_time = 0
-        sampled_trajectories = 0
+            start_full_time = time.time()
+            step += 1
+            rot_count = 1
+            asp_transformer.reset(config.ctd)
+            asp_transformer.build_dynamic_worlds(state, n_asp, horizon)
+            _, executed_actions = gar.simulate_samples(horizon, q_agent, actions)
+            start_time_check = time.time()
+            match sampling_mode:
+                case SamplingMode.RANDOM:
+                    new_violations, rot, samples = asp_transformer.call_clingo_check(
+                        state, executed_actions, [], n_rot, rot_count, False
+                    )
+                case SamplingMode.SEQUENTIAL:
+                    check = SeqentialCheck(
+                        # gar._state,
+                        SimulationState.from_state(gar._state),
+                        config.sampling.epsilon,
+                        config.sampling.delta,
+                        horizon,
+                    )
+                    new_violations, rot, samples = check.check(
+                        executed_actions, n_asp, False
+                    )
 
-        start_full_time = time.time()
-        step += 1
-        rot_count = 1
-        asp_transformer.reset(config.ctd)
-        asp_transformer.build_dynamic_worlds(state, n_asp, horizon)
-        _, executed_actions = gar.simulate_samples(horizon, q_agent, actions)
-        start_time_check = time.time()
-        match sampling_mode:
-            case SamplingMode.RANDOM:
-                new_violations, rot, samples = asp_transformer.call_clingo_check(
-                    state, executed_actions, [], n_rot, rot_count, False
-                )
-            case SamplingMode.SEQUENTIAL:
-                check = SeqentialCheck(
-                    gar._state,
-                    config.sampling.epsilon,
-                    config.sampling.delta,
-                    horizon,
-                )
-                new_violations, rot, samples = check.check(
-                    executed_actions, n_asp, False
+                case SamplingMode.MCTS:
+                    sim_state = SimulationState.from_state(gar._state)
+                    node = MCTSNode(sim_state, horizon)
+                    new_violations, rot, samples = node.check_MCTS(
+                        executed_actions,
+                        config.sampling.epsilon,
+                        config.sampling.delta,
+                        config.sampling.indifference,
+                    )
+                case _:
+                    raise NotImplementedError(
+                        f"Sampling mode {sampling_mode!r} is not wired in Main.py"
+                    )
+            end_time_check = time.time()
+            check_time += end_time_check - start_time_check
+            sampled_trajectories += samples
+
+            if config.logLevel > 2:
+                sim_state: SimulationState = SimulationState.from_state(gar._state)
+                real_probability = (
+                    sim_state.calculate_violation_probability_brute_force(
+                        sim_state.arr, executed_actions, horizon
+                    )
                 )
 
-            case SamplingMode.MCTS:
-                sim_state = SimulationState.from_state(gar._state, config.ctd)
-                node = MCTSNode(sim_state, executed_actions[0], horizon)
-                new_violations, rot, samples = node.check_MCTS(
-                    executed_actions,
-                    config.sampling.epsilon,
-                    config.sampling.delta,
-                    config.sampling.indifference,
-                )
-            case _:
-                raise NotImplementedError(
-                    f"Sampling mode {sampling_mode!r} is not wired in Main.py"
-                )
-        end_time_check = time.time()
-        check_time += end_time_check - start_time_check
-        sampled_trajectories += samples
+                rec = {
+                    "run_id": int(config.id),
+                    "round": int(round_nr),
+                    "step": int(step),
+                    "check_idx": 0,
+                    "true_viol_prob": round(float(real_probability), 4),
+                    "samples": int(samples),
+                    "accepted": bool(rot),
+                    "check_time_s": round(float(check_time), 4),
+                }
 
-        if config.logLevel > 2:
-            sim_state: SimulationState = SimulationState.from_state(
-                gar._state, config.ctd
-            )
-            real_probability = sim_state.calculate_violation_probability_brute_force(
-                executed_actions, horizon
-            )
-            checks += 1
-            if rot and real_probability > config.sampling.epsilon:
-                typeIIerror += 1
-            if not rot and real_probability <= config.sampling.epsilon:
-                typeIerror += 1
+                f.write(json.dumps(rec, separators=(",", ":")) + "\n")
+                checks += 1
+                if rot and real_probability > config.sampling.epsilon:
+                    typeIIerror += 1
+                if not rot and real_probability <= config.sampling.epsilon:
+                    typeIerror += 1
 
-        if rot:
-            # rule of three is fulfilled, execute RL policy
-            if len(actions) > 0:
-                action = actions.pop(0)
-            else:
+            if rot:
+                # rule of three is fulfilled, execute RL policy
+                # if len(actions) > 0:
+                # action = actions.pop(0)
+                # else:
                 action = executed_actions[0]
-        else:
-            # rule of three is not fulfilled, create emergency fix
+            else:
+                # rule of three is not fulfilled, create emergency fix
 
-            # here we should start the loop
-            tested_policies = [executed_actions]
-            violations = new_violations
-            acceptPolicy = sampled_trajectories >= n_asp
+                # here we should start the loop
+                tested_policies = [executed_actions]
+                violations = new_violations
+                acceptPolicy = sampled_trajectories >= n_asp
 
-            while True:
-                # TODO: this is inaccurate for MCTS
-                acceptPolicy = sampled_trajectories >= n_asp or acceptPolicy
-                gen_count += 1
-                fix_gen_start = time.time()
-                policy_fix = asp_transformer.call_clingo_generate(state, violations)
-                fix_gen_end = time.time()
-                gen_time += fix_gen_end - fix_gen_start
+                while True:
+                    # TODO: this is inaccurate for MCTS
+                    acceptPolicy = sampled_trajectories >= n_asp or acceptPolicy
+                    gen_count += 1
+                    step_gens += 1
+                    fix_gen_start = time.time()
+                    policy_fix = asp_transformer.call_clingo_generate(state, violations)
+                    fix_gen_end = time.time()
+                    gen_time += fix_gen_end - fix_gen_start
 
-                if not acceptPolicy:
-                    if policy_fix not in tested_policies:
-                        rot_count += 1
-                        tested_policies.append(policy_fix)
+                    if not acceptPolicy:
+                        if policy_fix not in tested_policies:
+                            rot_count += 1
+                            tested_policies.append(policy_fix)
+                        else:
+                            acceptPolicy = True
                     else:
-                        acceptPolicy = True
-                else:
-                    actions = policy_fix
-                    action = actions.pop(0)
-                    break
+                        # actions = policy_fix
+                        action = policy_fix.pop(0)
+                        break
 
-                start_time_check = time.time()
-                match sampling_mode:
-                    case SamplingMode.RANDOM:
-                        new_violations, rot, samples = (
-                            asp_transformer.call_clingo_check(
-                                state,
+                    start_time_check = time.time()
+                    match sampling_mode:
+                        case SamplingMode.RANDOM:
+                            new_violations, rot, samples = (
+                                asp_transformer.call_clingo_check(
+                                    state,
+                                    policy_fix,
+                                    violations,
+                                    n_rot,
+                                    rot_count,
+                                    acceptPolicy,
+                                )
+                            )
+                        case SamplingMode.SEQUENTIAL:
+                            new_violations, rot, samples = check.check(
+                                policy_fix, n_asp - sampled_trajectories, acceptPolicy
+                            )
+                        case SamplingMode.MCTS:
+                            node = MCTSNode(sim_state, horizon)
+                            new_violations, rot, samples = node.check_MCTS(
                                 policy_fix,
-                                violations,
-                                n_rot,
-                                rot_count,
-                                acceptPolicy,
+                                config.sampling.epsilon,
+                                config.sampling.delta,
+                                config.sampling.indifference,
+                            )
+                        case _:
+                            raise NotImplementedError(
+                                f"Sampling mode {sampling_mode!r} is not wired in Main.py"
+                            )
+                    end_time_check = time.time()
+                    check_time += end_time_check - start_time_check
+                    sampled_trajectories += samples
+                    if config.logLevel > 2:
+                        # calculate real_probability via brute force
+                        sim_state: SimulationState = SimulationState.from_state(
+                            gar._state
+                        )
+                        real_probability = (
+                            sim_state.calculate_violation_probability_brute_force(
+                                sim_state.arr, policy_fix, horizon
                             )
                         )
-                    case SamplingMode.SEQUENTIAL:
-                        new_violations, rot, samples = check.check(
-                            policy_fix, n_asp - sampled_trajectories, acceptPolicy
-                        )
-                    case SamplingMode.MCTS:
-                        node = MCTSNode(sim_state, policy_fix[0], horizon)
-                        new_violations, rot, samples = node.check_MCTS(
-                            policy_fix,
-                            config.sampling.epsilon,
-                            config.sampling.delta,
-                            config.sampling.indifference,
-                        )
-                    case _:
-                        raise NotImplementedError(
-                            f"Sampling mode {sampling_mode!r} is not wired in Main.py"
-                        )
-                end_time_check = time.time()
-                check_time += end_time_check - start_time_check
-                sampled_trajectories += samples
-                if config.logLevel > 2:
-                    checks += 1
-                    # calculate real_probability via brute force
-                    sim_state: SimulationState = SimulationState.from_state(
-                        gar._state, config.ctd
-                    )
-                    real_probability = (
-                        sim_state.calculate_violation_probability_brute_force(
-                            policy_fix, horizon
-                        )
-                    )
 
-                    if rot and real_probability > config.sampling.epsilon:
-                        typeIIerror += 1
-                    if not rot and real_probability <= config.sampling.epsilon:
-                        typeIerror += 1
+                        rec = {
+                            "run_id": int(config.id),
+                            "round": int(round_nr),
+                            "step": int(step),
+                            "check_idx": int(step_gens),
+                            "true_viol_prob": round(float(real_probability), 4),
+                            "samples": int(samples),
+                            "accepted": bool(rot),
+                            "check_time_s": round(float(check_time), 4),
+                        }
+                        f.write(json.dumps(rec, separators=(",", ":")) + "\n")
 
-                if rot:
-                    # cache
-                    actions = policy_fix
-                    action = actions.pop(0)
-                    break
-                else:
-                    rejected_count += 1
-                    for v in new_violations:
-                        if v not in violations:
-                            violations.append(v)
+                        checks += 1
+                        if rot and real_probability > config.sampling.epsilon:
+                            typeIIerror += 1
+                        if not rot and real_probability <= config.sampling.epsilon:
+                            typeIerror += 1
 
-        obs, reward, terminated, truncated, info = env.step(action)
-        state: ObservationState = ObservationState.from_obs(obs)
+                    if rot:
+                        # cache
+                        # actions = policy_fix
+                        action = policy_fix.pop(0)
+                        break
+                    else:
+                        rejected_count += 1
+                        for v in new_violations:
+                            if v not in violations:
+                                violations.append(v)
 
-        # for visualization purposes
-        # sleep = max(0, 0.1)
-        # time.sleep(sleep)
-        if config.render:
-            env.render()
-        done = terminated or truncated
-        end_full_time = time.time()
-        full_times.append(end_full_time - start_full_time)
-        check_times.append(check_time)
-        gen_times.append(gen_time)
-        samples_arr.append(sampled_trajectories)
+            obs, reward, terminated, truncated, info = env.step(action)
+            state: ObservationState = ObservationState.from_obs(obs)
 
-    mtn_1 = state.dead_frogs.sum()
-    mtn_2 = state.stun_counter
-    ctd = state.stun_counter - state.capt_frogs.sum()
+            # for visualization purposes
+            # sleep = max(0, 0.1)
+            # time.sleep(sleep)
+            if config.render:
+                env.render()
+            done = terminated or truncated
+            end_full_time = time.time()
+            full_times.append(end_full_time - start_full_time)
+            check_times.append(check_time)
+            gen_times.append(gen_time)
+            samples_arr.append(sampled_trajectories)
 
-    if gen_count == 0:
-        rej_percent = 0
-    else:
-        rej_percent = rejected_count / gen_count
+        mtn_1 = state.dead_frogs.sum()
+        mtn_2 = state.stun_counter
+        ctd = state.stun_counter - state.capt_frogs.sum()
 
-    statsCounter.record_Round(
-        step,
-        rej_percent,
-        samples_arr,
-        check_times,
-        gen_times,
-        full_times,
-        mtn_1,
-        mtn_2,
-        ctd,
-    )
-    if config.logLevel > 2:
-        print(f"type I: {typeIerror / checks}")
-        print(f"type II: {typeIIerror / checks}")
+        if gen_count == 0:
+            rej_percent = 0
+        else:
+            rej_percent = rejected_count / gen_count
 
-    env.close()
+        statsCounter.record_Round(
+            step,
+            rej_percent,
+            samples_arr,
+            check_times,
+            gen_times,
+            full_times,
+            mtn_1,
+            mtn_2,
+            ctd,
+        )
+        if config.logLevel > 2:
+            print(f"type I: {typeIerror / checks}")
+            print(f"type II: {typeIIerror / checks}")
+
+        env.close()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--id",
+        type=int,
+        default=0,
+        help="specifies the id of the run, used for database indexing",
+    )
     parser.add_argument(
         "--indifference",
         type=float,
@@ -313,6 +353,6 @@ if __name__ == "__main__":
 
     statsCounter = StatisticsCounter(config.rounds)
     for i in range(config.rounds):
-        run(config, statsCounter, seeds[i])
+        run(config, statsCounter, i, seeds[i])
 
     statsCounter.print_statistics(config.logLevel)

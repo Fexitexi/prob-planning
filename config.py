@@ -63,7 +63,9 @@ class Config:
     sampling: SamplingConfig = field(default_factory=SamplingConfig)
     horizon: int = 3
     size: int = 15
+    frogs: float = 0.01
     seed: int = 42
+    id: int = 0
     rounds: int = 10
     ctd: bool = False
     render: bool = False
@@ -80,7 +82,9 @@ class Config:
             ),
             horizon=args.horizon,
             size=args.size,
+            frogs=args.frogs,
             seed=args.seed,
+            id=args.id,
             rounds=args.rounds,
             ctd=bool(args.ctd),
             render=bool(args.render),

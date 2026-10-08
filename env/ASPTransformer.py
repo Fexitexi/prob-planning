@@ -331,7 +331,7 @@ class ASPTransformer:
         #    lines.append(constraint)
         if violations:
             # activate worlds here
-            if self._mode == SamplingMode.MCTS:
+            if self._mode == SamplingMode.MCTS or self._mode == SamplingMode.SEQUENTIAL:
                 for i, a in enumerate(violations):
                     for f, (c, r) in enumerate(state.frogs):
                         if f not in self._frogs:

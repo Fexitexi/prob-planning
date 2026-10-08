@@ -1,254 +1,237 @@
-from dataclasses import dataclass, replace
-from typing import ClassVar
-
 import numpy as np
 
 from env import dynamics
+from env.state import GardenerState
 
 
-@dataclass(eq=False, frozen=True)
+class SimulationCache:
+    __slots__ = (
+        "indexAgent",
+        "indexCaptFrogs",
+        "indexDeadFrogs",
+        "indexFrogTimer",
+        "indexFrogs",
+        "indexLakeTimer",
+        "indexViolation",
+        "numberOfFrogs",
+        "numberOfLakes",
+    )
+
+    def __init__(self, env: GardenerState):
+        self.numberOfFrogs = len(env.frogs)
+        self.numberOfLakes = len(env.lakes)
+        self.indexAgent = 0
+        self.indexFrogs = 2
+        self.indexDeadFrogs = 2 + 2 * self.numberOfFrogs
+        self.indexCaptFrogs = 2 + 3 * self.numberOfFrogs
+        self.indexFrogTimer = 2 + 4 * self.numberOfFrogs
+        self.indexLakeTimer = 2 + 5 * self.numberOfFrogs
+        self.indexViolation = 2 + 5 * self.numberOfFrogs + self.numberOfLakes
+
+
 class SimulationState:
-    PREFERENCE_WEIGHT: ClassVar[float] = 0.7
-    agent: np.ndarray  # [X, Y]
-    frogs: np.ndarray  # [[X, Y], [X, Y]]
-    dead_frogs: np.ndarray
-    captured_frogs: np.ndarray
-    lakes: np.ndarray  # [[X, Y], [X, Y]]
-    lakes_full: np.ndarray  # [True/False, True/False]
-    lake_timer: np.ndarray  # [0, 1, 2]
-    lake_respawn: int
-    frog_timer: np.ndarray  # [0, 1, 2]
-    walls: np.ndarray  # [[X, Y], [X, Y], [X, Y]]
-    pos_actions: np.ndarray
-    lake_dist: list
-    lake_action_grid: np.ndarray
-    size: int
-    ctd: bool = False
-    violation: bool = False
+    __slots__ = ("_hash", "_key", "arr", "cache", "env")
 
-    def __post_init__(self):
-        arrays = (
-            self.agent,
-            self.frogs,
-            self.dead_frogs,
-            self.captured_frogs,
-            self.lakes,
-            self.lakes_full,
-            self.lake_timer,
-            self.frog_timer,
-            self.walls,
-            self.pos_actions,
-            self.lake_action_grid,
-        )
-        for arr in arrays:
-            arr.flags.writeable = False
+    def __init__(self, arr, cache, env):
+        self.arr = arr
+        self.cache = cache
+        self.env: GardenerState = env
+        self._key = None
+        self._hash = None
 
-        for lake_dist_arr in self.lake_dist:
-            lake_dist_arr.flags.writeable = False
-
-        key = (
-            b"".join(a.tobytes() for a in arrays)
-            + self.size.to_bytes(4, "little")
-            + self.lake_respawn.to_bytes(4, "little")
-            + self.ctd.to_bytes(1, "little")
-            + bool(self.violation).to_bytes(1, "little")
-        )
-        object.__setattr__(self, "_key", key)
-        object.__setattr__(self, "_hash", hash(key))
+    @property
+    def key(self):
+        k = self._key
+        if k is None:
+            k = self._key = self.arr.tobytes()
+        return k
 
     def __hash__(self):
-        return self._hash
+        h = self._hash
+        if h is None:
+            h = self._hash = hash(self.key)
+        return h
 
     def __eq__(self, other):
+        if self is other:
+            return True
         if not isinstance(other, SimulationState):
             return NotImplemented
-        return self._key == other._key
+        return self.key == other.key
 
-    def get_possible_actions_with_probabilities(self, agentAction):
+    def get_possible_actions_with_probabilities(self, arr, agentAction, horizon):
         # Convert the agent action to a hashable tuple.
         possible = {(agentAction,): 1.0}
 
-        for i, frog in enumerate(self.frogs):
-            frog_actions = {}
+        for i in range(self.cache.numberOfFrogs):
+            new_possible = {}
+            x_f = arr[2 + 2 * i]
+            y_f = arr[3 + 2 * i]
+            dist = abs(arr[0] - x_f) + abs(arr[1] - y_f)
             # skip stunned frogs
-            if self.frog_timer[i] > 0 or self.captured_frogs[i] or self.dead_frogs[i]:
+            if (
+                arr[self.cache.indexFrogTimer + i] > 0
+                or arr[self.cache.indexCaptFrogs + i]
+                or arr[self.cache.indexDeadFrogs + i]
+                or dist > 2 * horizon
+            ):
                 possible = {k + (4,): v for k, v in possible.items()}
                 continue
 
-            preferred_dir, other_dirs = self.get_frog_actions(frog)
+            valid_moves = self.env.pos_actions[(x_f, y_f)][:4]
+            preferred_action = None
+            if (x_f, y_f) in self.env.lake_dict:
+                for lake_idx, dist, action in self.env.lake_dict[(x_f, y_f)]:
+                    if (
+                        arr[self.cache.indexLakeTimer + lake_idx] == 0
+                        and action != 4
+                        and valid_moves[action] == 1
+                    ):
+                        preferred_action = action
+                        break
 
-            if preferred_dir is not None and other_dirs:
-                # preferred = 70%, other options share the 30%
-                frog_actions[preferred_dir] = SimulationState.PREFERENCE_WEIGHT
-                other_prob = (1.0 - SimulationState.PREFERENCE_WEIGHT) / len(other_dirs)
-                for d in other_dirs:
-                    frog_actions[d] = other_prob
-            elif preferred_dir is not None and not other_dirs:
-                # only preferred choice => probability = 100%
-                frog_actions[preferred_dir] = 1.0
-            elif preferred_dir is None and other_dirs:
-                # no preferred direction, evenly split among all choices
-                prob = 1.0 / len(other_dirs)
-                for d in other_dirs:
-                    frog_actions[d] = prob
+            numberOfValidMoves = sum(valid_moves)
+            if preferred_action is not None and numberOfValidMoves > 1:
+                for idx, i in enumerate(valid_moves):
+                    if i == 0:
+                        continue
+                    if idx == preferred_action:
+                        for action_seq, prob in possible.items():
+                            new_possible[action_seq + (idx,)] = prob * 0.7
+                    else:
+                        for action_seq, prob in possible.items():
+                            new_possible[action_seq + (idx,)] = prob * (
+                                0.3 / (numberOfValidMoves - 1)
+                            )
+            elif preferred_action is None and numberOfValidMoves > 0:
+                for idx, i in enumerate(valid_moves):
+                    if i == 0:
+                        continue
+                    for action_seq, prob in possible.items():
+                        new_possible[action_seq + (idx,)] = prob * (
+                            1.0 / numberOfValidMoves
+                        )
+            elif preferred_action is not None and numberOfValidMoves <= 1:
+                for action_seq, prob in possible.items():
+                    new_possible[action_seq + (preferred_action,)] = prob
             else:
-                # No valid movement; frog stays in place.
-                frog_actions[4] = 1.0
-
-            # Expand every existing action sequence with this frog's possible moves.
-            new_possible = {}
-            for action_seq, prob in possible.items():
-                for frog_action, frog_prob in frog_actions.items():
-                    new_seq = action_seq + (frog_action,)
-                    new_possible[new_seq] = (
-                        new_possible.get(new_seq, 0.0) + prob * frog_prob
-                    )
+                # frog is unable to move
+                for action_seq, prob in possible.items():
+                    new_possible[action_seq + (4,)] = prob
 
             possible = new_possible
 
         return possible
 
-    def get_frog_actions(self, frog):
-        x, y = frog
-        unreachable = np.iinfo(np.int32).max
+    def apply_action(self, arr, action):
+        violation = False
+        result_arr = arr.copy()
+        directions = dynamics._action_to_direction
 
-        # Distance from (x, y) to every lake.
-        dists = self.lake_dist[:, x, y]
-        # dists = np.array([d[x, y] for d in self.lake_dist], dtype=np.int32)
-        masked = np.where(self.lakes_full, dists, unreachable)
-        nearest_idx = int(masked.argmin())
+        for i, a in enumerate(action):
+            a = int(a)
+            result_arr[2 * i] += directions[a][0]
+            result_arr[(2 * i) + 1] += directions[a][1]
 
-        preferred_idx = None
-        if masked[nearest_idx] != unreachable:
-            preferred_idx = int(self.lake_action_grid[nearest_idx, x, y])
+        for i in range(self.cache.numberOfFrogs):
+            if (
+                result_arr[self.cache.indexDeadFrogs + i] == 1
+                or result_arr[self.cache.indexCaptFrogs + i] == 1
+            ):
+                continue
+            captured_now = False
 
-        valid = self.pos_actions[x, y, :4]
-        if (
-            preferred_idx is not None
-            and preferred_idx < 4
-            and bool(valid[preferred_idx])
-        ):
-            preferred_dir = preferred_idx
-            other_dirs = [a for a in range(4) if valid[a] and a != preferred_idx]
-        else:
-            preferred_dir = None
-            other_dirs = [a for a in range(4) if valid[a]]
-        return preferred_dir, other_dirs
+            if (
+                result_arr[2 + (2 * i)] == result_arr[0]
+                and result_arr[3 + (2 * i)] == result_arr[1]
+            ):
+                if result_arr[self.cache.indexFrogTimer + i] > 0:
+                    captured_now = True
+                    result_arr[self.cache.indexCaptFrogs + i] = 1
+                else:
+                    violation = True
+                    result_arr[self.cache.indexDeadFrogs + i] = 1
 
-    def apply_action(state, action):
-        updates = {}
+            if result_arr[self.cache.indexFrogTimer + i] == 1 and not captured_now:
+                violation = True
 
-        # move agent
-        updates["agent"] = state.agent.copy() + dynamics._action_to_direction[action[0]]
-        # move frogs
-        if len(action) > 1:
-            updates["frogs"] = state.frogs.copy() + [
-                dynamics._action_to_direction[x] for x in action[1:]
-            ]
-        else:
-            updates["frogs"] = state.frogs.copy()
+            result_arr[self.cache.indexFrogTimer + i] = max(
+                result_arr[self.cache.indexFrogTimer + i] - 1, 0
+            )
 
-        same_pos = (updates["agent"] == updates["frogs"]).all(axis=-1)
-        active = np.logical_not(state.dead_frogs | state.captured_frogs)
-        # capture frogs
-        frog_capture = same_pos & active & (state.frog_timer > 0)
-        updates["captured_frogs"] = frog_capture | state.captured_frogs
+        agent_empties = np.zeros(self.cache.numberOfLakes, dtype=np.bool_)
+        for i in range(self.cache.numberOfLakes):
+            lake_timer = max(result_arr[self.cache.indexLakeTimer + i] - 1, 0)
 
-        # kill frogs
-        frog_kill = same_pos & active & np.logical_not(frog_capture)
-        updates["dead_frogs"] = frog_kill | state.dead_frogs
+            agent_dist = abs(result_arr[0] - self.env.lakes[i, 0]) + abs(
+                result_arr[1] - self.env.lakes[i, 1]
+            )
 
-        # decrease frog timer
-        updates["frog_timer"] = np.maximum(state.frog_timer - 1, 0)
+            if agent_dist == 1 and result_arr[self.cache.indexLakeTimer + i] == 0:
+                agent_empties[i] = True
+                lake_timer = self.env.lake_respawn
 
-        # decrease lake timer
-        updates["lake_timer"] = np.maximum(state.lake_timer - 1, 0)
+            result_arr[self.cache.indexLakeTimer + i] = lake_timer
 
-        # empty lakes
-        agent_empties = (np.abs(updates["agent"] - state.lakes).sum(axis=1) == 1) & (
-            updates["lake_timer"] == 0
-        )
+        for i in range(self.cache.numberOfFrogs):
+            if (
+                result_arr[self.cache.indexDeadFrogs + i] == 1
+                or result_arr[self.cache.indexCaptFrogs + i] == 1
+            ):
+                continue
 
-        # update lake timer
-        updates["lake_timer"] = np.where(
-            agent_empties, state.lake_respawn, updates["lake_timer"]
-        )
-        # update lake full
-        updates["lakes_full"] = updates["lake_timer"] == 0
+            for j in range(self.cache.numberOfLakes):
+                if agent_empties[j]:
+                    dx = abs(result_arr[2 + 2 * i] - self.env.lakes[j, 0])
+                    dy = abs(result_arr[3 + 2 * i] - self.env.lakes[j, 1])
+                    if max(dx, dy) == 1:
+                        result_arr[self.cache.indexFrogTimer + i] = 5
+                        violation = True
+                        break
 
-        diff_frogs = np.abs(updates["frogs"][:, None, :] - state.lakes[None, :, :])
-        near_lake = diff_frogs.max(axis=2) == 1
-        near_emptied_lake = near_lake & agent_empties[None, :]
-        active_frog_near_emptied_lake = near_emptied_lake.any(axis=1) & np.logical_not(
-            updates["captured_frogs"] | updates["dead_frogs"]
-        )
+        result_arr[-1] = 1 if violation else 0
 
-        updates["frog_timer"] = np.where(
-            active_frog_near_emptied_lake, 5, updates["frog_timer"]
-        )
+        return result_arr
 
-        updates["violation"] = (
-            frog_kill.any()
-            or active_frog_near_emptied_lake.any()
-            or ((state.frog_timer == 1) & active & np.logical_not(frog_capture)).any()
-        )
-
-        return replace(state, **updates)
-
-    def calculate_violation_probability_brute_force(self, agentActions: list):
+    def calculate_violation_probability_brute_force(
+        self, arr, agentActions: list, depth
+    ):
         violation_probability = 0.0
         # short circuit if an early violation happens
-        if self.violation:
-            return 1
+        if arr[-1] == 1:
+            return 1.0
 
         # return 0 if a leaf node (and no violation due to the if above)
-        if len(agentActions) == 0:
-            return 0
+        if depth == 0:
+            return 0.0
 
         for a, p in self.get_possible_actions_with_probabilities(
-            agentActions[0]
+            arr, agentActions[0], depth
         ).items():
-            state = self.apply_action(a)
+            next_arr = self.apply_action(arr, a)
             violation_probability += (
-                p * state.calculate_violation_probability_brute_force(agentActions[1:])
+                p
+                * self.calculate_violation_probability_brute_force(
+                    next_arr, agentActions[1:], depth - 1
+                )
             )
         return violation_probability
 
     @staticmethod
-    def _compute_lake_action_grid(lake_best_step):
-        if not lake_best_step:
-            return np.empty((0, 0, 0), dtype=np.int8)
-        lake_steps = np.stack(lake_best_step, axis=0)
-        action_lut = np.full((3, 3), -1, dtype=np.int8)
-        action_lut[2, 1] = 0  # [ 1,  0]
-        action_lut[1, 2] = 1  # [ 0,  1]
-        action_lut[0, 1] = 2  # [-1,  0]
-        action_lut[1, 0] = 3  # [ 0, -1]
-        action_lut[1, 1] = 4  # [ 0,  0]
-        return action_lut[lake_steps[..., 0] + 1, lake_steps[..., 1] + 1]
-
-    @staticmethod
-    def from_state(state, ctd: bool = False):
-        return SimulationState(
-            agent=state.agent.copy(),
-            frogs=state.frogs.copy(),
-            dead_frogs=state.dead_frogs.copy(),
-            captured_frogs=state.capt_frogs.copy(),
-            lakes=state.lakes.copy(),
-            lakes_full=state.lakes_full.copy(),
-            lake_timer=state.lake_timer.copy(),
-            lake_respawn=state.lake_respawn,
-            frog_timer=state.frog_timer.copy(),
-            walls=state.walls.copy(),
-            pos_actions=state.pos_actions,
-            lake_dist=np.stack(state.lake_dist),
-            lake_action_grid=SimulationState._compute_lake_action_grid(
-                state.lake_best_step
-            ),
-            size=state.size,
-            ctd=ctd,
-            violation=False,
-        )
+    def from_state(state: GardenerState):
+        # only call at the first step, otherwise use fast_clone or apply_action
+        arr = np.concatenate(
+            [
+                state.agent,
+                state.frogs.ravel(),
+                state.dead_frogs,
+                state.capt_frogs,
+                state.frog_timer,
+                state.lake_timer,
+                [0],
+            ]
+        ).astype(np.int8)
+        return SimulationState(arr, SimulationCache(state), state)
 
     def fast_clone(self):
-        return replace(self)
+        return SimulationState(self.arr.copy(), self.cache, self.env)

@@ -284,7 +284,6 @@ class GardenerEnv(gym.Env):
 
         from collections import deque
 
-        # TODO: apparently incorrect, makes frogs move uniformly random
         for lx, ly in lake_positions:
             dist = np.full((size, size), np.iinfo(np.int32).max, dtype=np.int32)
             best = np.zeros((size, size, 2), dtype=np.int8)
@@ -298,16 +297,18 @@ class GardenerEnv(gym.Env):
                 for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
                     nx, ny = x + dx, y + dy
                     if 0 <= nx < size and 0 <= ny < size:
-                        if (nx, ny) in walls_set:
+                        if (nx, ny) in walls_set or (nx, ny) in lakes_set:
                             continue
-                        # Also avoid other lakes
-                        if (nx, ny) in lakes_set and (nx, ny) != (lx, ly):
-                            continue
-
                         if dist[nx, ny] > dist[x, y] + 1:
                             dist[nx, ny] = dist[x, y] + 1
-                            if dist[nx, ny] == 1:
+                            if dist[x, y] == 0:
+                                # (x, y) is the lake. We are at (nx, ny) next to it.
+                                # Set best move to [0, 0] to stop/interact here.
                                 best[nx, ny] = np.array([0, 0], dtype=np.int8)
+                            else:
+                                # (x, y) is a safe path tile.
+                                # Point backwards to it: (-dx, -dy).
+                                best[nx, ny] = np.array([-dx, -dy], dtype=np.int8)
                             q.append((nx, ny))
 
             lake_dist.append(dist)
