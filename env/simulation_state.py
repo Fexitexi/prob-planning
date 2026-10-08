@@ -185,8 +185,7 @@ class SimulationState:
                     dx = abs(result_arr[2 + 2 * i] - self.env.lakes[j, 0])
                     dy = abs(result_arr[3 + 2 * i] - self.env.lakes[j, 1])
                     if max(dx, dy) == 1:
-                        result_arr[self.cache.indexFrogTimer + i] = 5
-                        violation = True
+                        result_arr[self.cache.indexFrogTimer + i] = 4
                         break
 
         result_arr[-1] = 1 if violation else 0

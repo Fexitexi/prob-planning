@@ -49,7 +49,6 @@ any_frog_timer(I,T) :- frog_timer(I,T), frog(X,Y,I,T).
 
 norm_violation() :- frog_capture(F,T), not ctd(F,T).
 norm_violation() :- ctd(F,T), not ctd_check(F).
-norm_violation() :- ctd(F,T).
 
 #show norm_violation/0.
 #defined norm_violation/0.
