@@ -82,12 +82,11 @@ class SimulationState:
             preferred_action = None
             if (x_f, y_f) in self.env.lake_dict:
                 for lake_idx, dist, action in self.env.lake_dict[(x_f, y_f)]:
-                    if (
-                        arr[self.cache.indexLakeTimer + lake_idx] == 0
-                        and action != 4
-                        and valid_moves[action] == 1
+                    if arr[self.cache.indexLakeTimer + lake_idx] == 0 and (
+                        action == 4 or valid_moves[action] == 1
                     ):
-                        preferred_action = action
+                        if action != 4:
+                            preferred_action = action
                         break
 
             numberOfValidMoves = sum(valid_moves)
@@ -167,7 +166,7 @@ class SimulationState:
                 result_arr[1] - self.env.lakes[i, 1]
             )
 
-            if agent_dist == 1 and result_arr[self.cache.indexLakeTimer + i] == 0:
+            if agent_dist == 1 and lake_timer == 0:
                 agent_empties[i] = True
                 lake_timer = self.env.lake_respawn
 
@@ -185,7 +184,7 @@ class SimulationState:
                     dx = abs(result_arr[2 + 2 * i] - self.env.lakes[j, 0])
                     dy = abs(result_arr[3 + 2 * i] - self.env.lakes[j, 1])
                     if max(dx, dy) == 1:
-                        result_arr[self.cache.indexFrogTimer + i] = 4
+                        result_arr[self.cache.indexFrogTimer + i] = 5
                         break
 
         result_arr[-1] = 1 if violation else 0
@@ -202,6 +201,12 @@ class SimulationState:
 
         # return 0 if a leaf node (and no violation due to the if above)
         if depth == 0:
+            for i in range(self.cache.numberOfFrogs):
+                if (
+                    arr[self.cache.indexFrogTimer + i] > 0
+                    and not arr[self.cache.indexCaptFrogs + i]
+                ):
+                    return 1.0
             return 0.0
 
         for a, p in self.get_possible_actions_with_probabilities(
@@ -226,10 +231,14 @@ class SimulationState:
                 state.dead_frogs,
                 state.capt_frogs,
                 state.frog_timer,
-                state.lake_timer,
+                np.where(
+                    state.lakes_full,
+                    0,
+                    np.maximum(state.lake_timer, 1),
+                ),
                 [0],
             ]
-        ).astype(np.int8)
+        ).astype(np.int16)
         return SimulationState(arr, SimulationCache(state), state)
 
     def fast_clone(self):

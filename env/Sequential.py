@@ -1,6 +1,5 @@
 import random
 
-from env.ASPSolver import ASPSolver
 from env.simulation_state import SimulationState
 
 
@@ -9,7 +8,6 @@ class SeqentialCheck:
         "epsilon",
         "horizon",
         "rejectionBoundary",
-        "solver",
         "state",
         "wealthAccepting",
         "wealthRejecting",
@@ -17,7 +15,6 @@ class SeqentialCheck:
 
     def __init__(self, state, epsilon, delta, horizon):
         self.state: SimulationState = state
-        self.solver: ASPSolver = ASPSolver(True, horizon)
         self.horizon = horizon
         self.epsilon = epsilon
 
@@ -25,37 +22,24 @@ class SeqentialCheck:
 
         self.wealthAccepting = 1
         self.wealthRejecting = 1
-        # self.solver.instantiate_level(self.state)
-        # self.solver.instantiate_state(self.state)
-        # self.solver.prepare_agent_movement()
-        # self.solver.prepare_frog_action(self.state)
 
     def check(self, actions, maxSamples, sampleMax):
         violations: list = []
-        quickAcceptWealth = 1
-        quickWinPossible = True
         loop = 0
         empMean = 0.0
         empSum2 = 0.0
         aGRAPAlambda = 0.0
         lambdaAccepting = 0.0
         lambdaRejecting = 0.0
-        # self.solver.clear_agent_movement()
-        # self.solver.instantiate_agent_movement(actions)
         while loop < maxSamples:
             loop += 1
             loopViolations, outcome = self.sample(actions)
             if outcome == 1:
-                #    quickWinPossible = False
                 violations.append(loopViolations)
 
             difference = outcome - self.epsilon
             acceptingReward = 1 - (lambdaAccepting * difference)
             rejectingReward = 1 + (lambdaRejecting * difference)
-            # if quickWinPossible:
-            #    quickAcceptWealth *= 1 - (outcome - self.epsilon)
-            #    if quickAcceptWealth > self.rejectionBoundary:
-            #        return [], True, loop
 
             self.wealthAccepting *= acceptingReward
             self.wealthRejecting *= rejectingReward

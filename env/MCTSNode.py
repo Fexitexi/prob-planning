@@ -35,13 +35,11 @@ class MCTSNode:
         wealthAccepting = 1
         wealthRejecting = 1
         loop = 0
-        maxWeight = 0
         while True:
             loop += 1
             outcome, transitionSequence = self.sample(
                 self.horizon, 1, [], agentActions, False
             )
-            maxWeight = max(maxWeight, self.maxWeight)
             if len(transitionSequence) != self.horizon:
                 print(f"ERROR: depth: {self.horizon}, length:{len(transitionSequence)}")
 
@@ -140,7 +138,7 @@ class MCTSNode:
             self.value += 1
         self.visitCount += 1
 
-        self.updateMaxWeight(agentActions)
+        self.updateMaxWeight(probabilities)
 
         return outcome, transitionSequence
 
@@ -201,16 +199,15 @@ class MCTSNode:
             self.value += 1
         return result, actions
 
-    def updateMaxWeight(self, agentActions):
-        maxWeight = 0
-        probabilities = self.calculate_probabilities_normalized(agentActions[0])
+    def updateMaxWeight(self, probabilities):
+        maxWeight = self.maxWeight
 
         for a in self.transitions:
             if a in self.children:
                 downstreamWeight = self.children[a].maxWeight
             else:
                 downstreamWeight = 1
-            branchWeight = self.transitions[a] / probabilities[a] * downstreamWeight
+            branchWeight = (self.transitions[a] / probabilities[a]) * downstreamWeight
             maxWeight = max(maxWeight, branchWeight)
 
         self.maxWeight = maxWeight
