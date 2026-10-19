@@ -35,11 +35,13 @@ class MCTSNode:
         wealthAccepting = 1
         wealthRejecting = 1
         loop = 0
+        maxmax = 0
         while True:
             loop += 1
             outcome, transitionSequence = self.sample(
                 self.horizon, 1, [], agentActions, False
             )
+            maxmax = max(maxmax, self.maxWeight)
             if len(transitionSequence) != self.horizon:
                 print(f"ERROR: depth: {self.horizon}, length:{len(transitionSequence)}")
 
@@ -58,7 +60,7 @@ class MCTSNode:
             )  # makes money if outcome  == 1
             if acceptingReward <= 0:
                 print(
-                    f"ERROR {loop}: acceptingReward:{acceptingReward}, lambdaAccepting:{lambdaAccepting}, outcome:{outcome}, highestPossibleOutcome:{self.maxWeight}"
+                    f"ERROR {loop}: acceptingReward:{acceptingReward}, aGRAPAlambda: {aGRAPAlambda}, intermediate:{min(-aGRAPAlambda, 0.75 / (self.maxWeight - epsilon))}, lambdaAccepting:{lambdaAccepting}, outcome:{outcome}, highestPossibleOutcome:{self.maxWeight}"
                 )
             if rejectingReward <= 0:
                 print(
@@ -87,9 +89,15 @@ class MCTSNode:
             )
 
             lambdaAccepting = max(
-                0, min(-aGRAPAlambda, 0.75 / (self.maxWeight - epsilon))
+                0,
+                min(
+                    -aGRAPAlambda,
+                    0.75 / (self.maxWeight - epsilon * (1 + indifference)),
+                ),
             )
-            lambdaRejecting = max(0, min(aGRAPAlambda, 0.75 / epsilon))
+            lambdaRejecting = max(
+                0, min(aGRAPAlambda, 0.75 / epsilon * (1 - indifference))
+            )
         # print(f"wealthAccepting:{wealthAccepting}, wealthRejecting:{wealthRejecting}")
         return violations, False, loop
 
@@ -138,7 +146,7 @@ class MCTSNode:
             self.value += 1
         self.visitCount += 1
 
-        self.updateMaxWeight(probabilities)
+        self.updateMaxWeight(self.calculate_probabilities_normalized(agentActions[0]))
 
         return outcome, transitionSequence
 
@@ -168,7 +176,9 @@ class MCTSNode:
                 explore = MCTSNode.C * math.sqrt(
                     math.log(self.visitCount) / childNode.visitCount
                 )
-                values[a] = self.transitions[a] * (exploit + explore)
+                values[a] = (0.2 * self.transitions[a]) + (
+                    0.8 * self.transitions[a] * (exploit + explore)
+                )
             else:
                 values[a] = (
                     self.transitions[a]
@@ -178,7 +188,9 @@ class MCTSNode:
 
         total = sum(values.values())
         if total == 0:
-            return {action: 1 / len(values) for action, value in values.items()}
+            return {
+                action: self.transitions[action] for action, value in values.items()
+            }
         return {action: value / total for action, value in values.items()}
 
     def simulateMC(self, agentActions, depth):
@@ -200,7 +212,7 @@ class MCTSNode:
         return result, actions
 
     def updateMaxWeight(self, probabilities):
-        maxWeight = self.maxWeight
+        maxWeight = 0
 
         for a in self.transitions:
             if a in self.children:
