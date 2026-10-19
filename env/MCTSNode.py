@@ -43,7 +43,9 @@ class MCTSNode:
             )
             maxmax = max(maxmax, self.maxWeight)
             if len(transitionSequence) != self.horizon:
-                print(f"ERROR: depth: {self.horizon}, length:{len(transitionSequence)}")
+                raise AssertionError(
+                    f"ERROR: depth: {self.horizon} should be equal to transitionSequence's length:{len(transitionSequence)}"
+                )
 
             if outcome > 0:
                 violations.append(transitionSequence)
@@ -59,16 +61,17 @@ class MCTSNode:
                 lambdaRejecting * rejectingDifference
             )  # makes money if outcome  == 1
             if acceptingReward <= 0:
-                print(
-                    f"ERROR {loop}: acceptingReward:{acceptingReward}, aGRAPAlambda: {aGRAPAlambda}, intermediate:{min(-aGRAPAlambda, 0.75 / (self.maxWeight - epsilon))}, lambdaAccepting:{lambdaAccepting}, outcome:{outcome}, highestPossibleOutcome:{self.maxWeight}"
+                raise AssertionError(
+                    f"invalid acceptingReward at loop {loop}: "
+                    f"acceptingReward={acceptingReward}, lambdaAccepting={lambdaAccepting}, "
+                    f"acceptingDifference={acceptingDifference}, outcome={outcome}, "
+                    f"maxWeight={self.maxWeight}, epsilon={epsilon}"
                 )
             if rejectingReward <= 0:
-                print(
-                    f"ERROR rejectingReward:{rejectingReward}, lambdaRejecting:{lambdaRejecting}, outcome:{outcome}, highestPossibleOutcome:{self.maxWeight}"
-                )
-            if acceptingReward > 1 and rejectingReward > 1:
-                print(
-                    f"outcome:{outcome}, lambdaRejecting:{lambdaRejecting}, lambdaAccepting:{lambdaAccepting}"
+                raise AssertionError(
+                    f"invalid rejectingReward at loop {loop}: "
+                    f"rejectingReward={rejectingReward}, lambdaRejecting={lambdaRejecting}, "
+                    f"outcome={outcome}, maxWeight={self.maxWeight}"
                 )
 
             wealthAccepting *= acceptingReward
